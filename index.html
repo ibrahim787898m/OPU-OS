@@ -37,10 +37,14 @@ a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
 
 /* ---------- layout ---------- */
 #app{display:none;position:relative;z-index:1;min-height:100vh}
-#app.on{display:grid;grid-template-columns:240px 1fr}
-aside{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:4px;background:rgba(10,12,16,.7);backdrop-filter:blur(8px)}
-.brand{font-weight:700;font-size:20px;letter-spacing:-.02em;padding:0 10px 18px}
-.brand span{color:var(--acc)}
+#app.on{display:grid;grid-template-columns:240px minmax(0,1fr);transition:grid-template-columns .2s}
+aside{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:4px;background:rgba(10,12,16,.7);backdrop-filter:blur(8px)}
+.brand{font-weight:700;font-size:20px;letter-spacing:-.02em;padding:0 4px 18px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.iconbtn{background:none;border:1px solid var(--line2);border-radius:8px;color:var(--dim);cursor:pointer;width:30px;height:30px;display:grid;place-items:center;font-size:14px;flex:none;padding:0}
+.iconbtn:hover{color:var(--text);border-color:var(--faint)}
+.mtop,.scrim,.mback{display:none}
+.cmd{display:flex;align-items:center;gap:8px;text-align:left}.cmd kbd{margin-left:auto}
+.brand .bt>span{color:var(--acc)}
 .brand small{display:block;font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.14em;font-weight:400;margin-top:2px}
 .nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;color:var(--dim);cursor:pointer;border:1px solid transparent;background:none;width:100%;text-align:left}
 .nav:hover{color:var(--text);background:var(--panel)}
@@ -244,17 +248,65 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .fade{animation:f .35s ease}
 @keyframes f{from{opacity:0;transform:translateY(6px)}}
 
+/* ---------- collapsed sidebar (desktop) ---------- */
+#app.on.collapsed{grid-template-columns:68px minmax(0,1fr)}
+#app.collapsed aside{padding:22px 10px}
+#app.collapsed .lb,#app.collapsed .nav kbd,#app.collapsed .brand .bt,#app.collapsed .cmd kbd,#app.collapsed .timer .label,#app.collapsed .timer .row{display:none}
+#app.collapsed .brand{justify-content:center;padding:0 0 18px}
+#app.collapsed .collapse{transform:rotate(180deg)}
+#app.collapsed .nav{justify-content:center;padding:10px 0}
+#app.collapsed .nav .ico{width:auto;font-size:15px}
+#app.collapsed .sync,#app.collapsed .cmd{justify-content:center;padding:7px 0}
+#app.collapsed .timer{padding:8px 2px;text-align:center;cursor:pointer}
+#app.collapsed .timer .t{font-size:12.5px}
+
+/* ---------- medium screens: tighter notes columns ---------- */
+@media (max-width:1240px){
+  .notes{grid-template-columns:185px 250px minmax(0,1fr)}
+  main{padding:30px 28px 80px}
+}
+
+/* ---------- mobile / tablet ---------- */
 @media (max-width:980px){
-  #app.on{grid-template-columns:1fr}
-  aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line)}
-  .brand{width:100%;padding-bottom:8px}
-  .nav{width:auto}.nav kbd{display:none}
-  .side-bottom{width:100%;flex-direction:row}
-  main{padding:24px 18px 60px}
-  .g2,.g3,.g4{grid-template-columns:1fr}.span2,.span3{grid-column:auto}
-  .notes,.notes.j{grid-template-columns:1fr}
+  #app.on,#app.on.collapsed{grid-template-columns:minmax(0,1fr)}
+  .mtop{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:30;padding:10px 14px;background:rgba(10,12,16,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .brand-m{font-weight:700;font-size:18px;letter-spacing:-.02em;flex:1}.brand-m span{color:var(--acc)}
+  #mTimer{color:var(--acc);font-size:13px}
+  aside,#app.collapsed aside{position:fixed;left:0;top:0;bottom:0;width:270px;height:100dvh;z-index:46;transform:translateX(-102%);transition:transform .22s ease;background:var(--bg);border-right:1px solid var(--line2);padding:20px 14px}
+  #app.drawer aside{transform:none;box-shadow:20px 0 60px rgba(0,0,0,.5)}
+  #app.drawer .scrim{display:block;position:fixed;inset:0;z-index:45;background:rgba(5,6,9,.6)}
+  /* the drawer always shows full labels */
+  #app.collapsed .lb,#app.collapsed .brand .bt{display:inline}#app.collapsed .timer .label{display:block}#app.collapsed .timer .row{display:flex}
+  #app.collapsed .nav{justify-content:flex-start;padding:9px 10px}#app.collapsed .nav .ico{width:18px;font-size:13px}#app.collapsed .cmd{justify-content:flex-start;padding:4px 10px}
+  #app.collapsed .timer{padding:12px;text-align:left}#app.collapsed .timer .t{font-size:28px}
+  #app.collapsed .sync{justify-content:flex-start;padding:7px 10px}#app.collapsed .brand{justify-content:space-between;padding:0 4px 18px 10px}
+  .collapse,.nav kbd,.cmd kbd{display:none!important}
+  main{padding:20px 14px 60px}
+  .head{margin-bottom:18px;gap:12px}.head h2{font-size:26px}.hero h2{font-size:28px}
+  .head>.chips,.hero>.chips{width:100%}
+  .seg{max-width:100%;overflow-x:auto;scrollbar-width:none}.seg::-webkit-scrollbar{display:none}.seg button{white-space:nowrap;flex:none}
+  .g2,.g3{grid-template-columns:minmax(0,1fr)}.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .span2,.span3{grid-column:1/-1}
+  .card{overflow-x:auto;padding:14px}
+  .stat .v{font-size:24px}.stat .v small{font-size:13px}
+  td,th{padding:8px 6px}td{font-size:13px}
+  .banner{flex-wrap:wrap}
+  /* notes: show the list OR the open note, never three squashed columns */
+  .notes,.notes.j{grid-template-columns:minmax(0,1fr);min-height:0}
   .nside,.nlist{max-height:none}
+  .nside .tree{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px}
+  .notes:not(.open)>.editor{display:none}
+  .notes.open>.nside,.notes.open>.ncol{display:none}
+  .mback{display:inline-flex;align-self:flex-start}
+  .editor textarea,.prose{min-height:60vh}
+  .editor input.title{font-size:22px}
   .day{grid-template-columns:22px minmax(0,1fr)}.day .pl{grid-column:2}
+  .step{flex-wrap:wrap}.step .title{min-width:60%}
+  .kanban{grid-template-columns:repeat(5,minmax(220px,80vw))}
+  .toast{left:14px;right:14px;bottom:14px;text-align:center}
+}
+@media (max-width:340px){
+  .g4{grid-template-columns:minmax(0,1fr)}
 }
 </style>
 </head>
@@ -284,25 +336,28 @@ tr:hover td{background:rgba(255,255,255,.015)}
 
 <!-- ============ APP ============ -->
 <div id="app">
+  <!-- mobile top bar (hidden on desktop) -->
+  <div class="mtop"><button class="iconbtn" data-act="drawer" aria-label="Menu">☰</button><div class="brand-m">OPU<span>/</span>OS</div><span class="mono" id="mTimer"></span><button class="iconbtn" data-act="palette" aria-label="Command palette">⌘</button></div>
+  <div class="scrim" data-act="drawer"></div>
   <aside>
-    <div class="brand">OPU<span>/</span>OS<small>IBRAHIM'S COMMAND CENTER</small></div>
-    <button class="nav" data-act="go" data-v="dash"><span class="ico">◆</span>Dashboard<kbd>1</kbd></button>
-    <button class="nav" data-act="go" data-v="study"><span class="ico">▲</span>Study<kbd>2</kbd></button>
-    <button class="nav" data-act="go" data-v="skills"><span class="ico">●</span>Skills<kbd>3</kbd></button>
-    <button class="nav" data-act="go" data-v="projects"><span class="ico">■</span>Projects<kbd>4</kbd></button>
-    <button class="nav" data-act="go" data-v="career"><span class="ico">➜</span>Career<kbd>5</kbd></button>
-    <button class="nav" data-act="go" data-v="github"><span class="ico">⌥</span>GitHub<kbd>6</kbd></button>
-    <button class="nav" data-act="go" data-v="notes"><span class="ico">¶</span>Notes &amp; Journal<kbd>7</kbd></button>
-    <button class="nav" data-act="go" data-v="links"><span class="ico">@</span>Presence<kbd>8</kbd></button>
-    <button class="nav" data-act="go" data-v="settings"><span class="ico">⚙</span>Settings<kbd>9</kbd></button>
+    <div class="brand"><span class="bt">OPU<span>/</span>OS<small>IBRAHIM'S COMMAND CENTER</small></span><button class="iconbtn collapse" data-act="sideToggle" title="Collapse sidebar ( [ )">«</button></div>
+    <button class="nav" data-act="go" data-v="dash" title="Dashboard"><span class="ico">◆</span><span class="lb">Dashboard</span><kbd>1</kbd></button>
+    <button class="nav" data-act="go" data-v="study" title="Study"><span class="ico">▲</span><span class="lb">Study</span><kbd>2</kbd></button>
+    <button class="nav" data-act="go" data-v="skills" title="Skills"><span class="ico">●</span><span class="lb">Skills</span><kbd>3</kbd></button>
+    <button class="nav" data-act="go" data-v="projects" title="Projects"><span class="ico">■</span><span class="lb">Projects</span><kbd>4</kbd></button>
+    <button class="nav" data-act="go" data-v="career" title="Career"><span class="ico">➜</span><span class="lb">Career</span><kbd>5</kbd></button>
+    <button class="nav" data-act="go" data-v="github" title="GitHub"><span class="ico">⌥</span><span class="lb">GitHub</span><kbd>6</kbd></button>
+    <button class="nav" data-act="go" data-v="notes" title="Notes & Journal"><span class="ico">¶</span><span class="lb">Notes &amp; Journal</span><kbd>7</kbd></button>
+    <button class="nav" data-act="go" data-v="links" title="Presence"><span class="ico">@</span><span class="lb">Presence</span><kbd>8</kbd></button>
+    <button class="nav" data-act="go" data-v="settings" title="Settings"><span class="ico">⚙</span><span class="lb">Settings</span><kbd>9</kbd></button>
     <div class="side-bottom">
       <button class="sync" id="syncInd" data-act="go" data-v="settings"></button>
-      <div class="timer" id="timer">
+      <div class="timer" id="timer" data-act="timerBox">
         <div class="label">Focus</div>
         <div class="t" id="timerT">25:00</div>
         <div class="row" id="timerRow"></div>
       </div>
-      <button class="btn ghost sm" data-act="palette" style="text-align:left">⌘ Command <kbd style="float:right">Ctrl K</kbd></button>
+      <button class="btn ghost sm cmd" data-act="palette" title="Command palette (Ctrl K)"><span>⌘</span><span class="lb">Command</span><kbd>Ctrl K</kbd></button>
     </div>
   </aside>
   <main id="main"></main>
@@ -439,7 +494,7 @@ async function connectSync(token){
 }
 function setSync(s,msg=''){syncSt={s,at:Date.now(),msg};const el=$('#syncInd');if(!el)return;
   el.className='sync '+s;el.title=msg;
-  el.innerHTML={off:'☁ local only',pending:'☁ unsaved changes…',busy:'<span class="pulse">☁ syncing…</span>',ok:'☁ synced',err:'☁ sync error — see Settings'}[s];
+  el.innerHTML='<span>☁</span><span class="lb">'+{off:'local only',pending:'unsaved changes…',busy:'<span class="pulse">syncing…</span>',ok:'synced',err:'sync error — see Settings'}[s]+'</span>';
   const d=$('#syncDetail');if(d)d.textContent=s==='err'?msg:s==='ok'?'Last synced '+new Date().toLocaleTimeString():'';}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&unlocked)pullGist()});
 window.addEventListener('beforeunload',e=>{if(pushT){pushGist();e.preventDefault();e.returnValue=''}});
@@ -478,7 +533,7 @@ function initLock(){
   };
   if(has&&sessionStorage.getItem(SKEY))enter();
 }
-function enter(){$('#lock').style.display='none';$('#app').classList.add('on');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');pullGist();go(location.hash.slice(1)||'dash');renderTimer();checkSite();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)}
+function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');pullGist();go(location.hash.slice(1)||'dash');renderTimer();checkSite();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)}
 function lock(){sessionStorage.removeItem(SKEY);location.reload()}
 
 /* ---------------- stats helpers ---------------- */
@@ -493,7 +548,7 @@ const hm=m=>m>=60?`${Math.floor(m/60)}h ${m%60?m%60+'m':''}`.trim():`${m}m`;
 /* ---------------- router ---------------- */
 let view='dash';
 const views={dash,study,skills,projects,career,github,notes,links,settings};
-function go(v){if(!views[v])v='dash';view=v;if(v==='notes')loadGhNotes();location.hash=v;document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.v===v));render();window.scrollTo(0,0)}
+function go(v){if(!views[v])v='dash';view=v;$('#app').classList.remove('drawer');if(v==='notes')loadGhNotes();location.hash=v;document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.v===v));render();window.scrollTo(0,0)}
 function render(){$('#main').innerHTML=`<div class="fade">${views[view]()}</div>`;after[view]?.()}
 const after={};
 
@@ -1017,7 +1072,7 @@ async function ghText(n){
 const ghLoadAll=()=>ghIdx?(ghAllP||=Promise.all(ghIdx.items.map(n=>ghText(n).catch(()=>''))).then(()=>{if(['notes','study','dash'].includes(view))render()})):Promise.resolve();
 
 /* ---------------- NOTES & JOURNAL ---------------- */
-let noteId=null,noteMode='edit',nView='notes',nSrc='all',nSubj='',nTopic='',nType='all',nQ='',nSort='topic',jId=null,jQ='';
+let nOpen=false,noteId=null,noteMode='edit',nView='notes',nSrc='all',nSubj='',nTopic='',nType='all',nQ='',nSort='topic',jId=null,jQ='';
 const isJ=n=>n.type==='journal';
 const MOODS=['😣','😕','😐','🙂','😄'];
 function allNotes(){return [...S.notes.filter(n=>!isJ(n)).map(n=>({...n,src:n.src||'local'})),...(ghIdx?.items||[])]}
@@ -1039,7 +1094,7 @@ function notesLib(){
   const ghState=ghBusy?'<span class="pulse">syncing…</span>':ghErr?`<span style="color:var(--red)">${esc(ghErr)}</span>`:ghIdx?`${ghIdx.items.length} files · ${ago(new Date(ghIdx.at).toISOString())}`:'not loaded';
   return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">Course notes live from GitHub, plus your own notes. <span class="mono faint" style="font-size:12px">GitHub: ${ghState}</span></div></div>
   <div class="chips"><span class="seg"><button class="on">Notes</button><button data-act="nView" data-v="journal">Journal</button></span><button class="btn" data-act="ghNotes" title="Re-read your GitHub repos">↻ GitHub</button><button class="btn pri" data-act="newNote" data-t="note">+ Note</button></div></div>
-  <div class="notes">
+  <div class="notes ${nOpen?'open':''}">
     <div class="nside">
       <input class="search" id="nQ" placeholder="Search notes…" value="${esc(nQ)}">
       <span class="seg">${[['all','All'],['github','GitHub'],['local','Mine']].map(([k,l])=>`<button class="${nSrc===k?'on':''}" data-act="nSrc" data-v="${k}">${l}</button>`).join('')}</span>
@@ -1047,7 +1102,7 @@ function notesLib(){
       ${subjList.map(s=>`<button class="${nSubj===s&&!nTopic?'on':''}" data-act="nPick" data-s="${esc(s)}" data-t=""><span><b>${esc(s)}</b></span><span>${subjects[s].n}</span></button>
         ${nSubj===s?Object.entries(subjects[s].t).sort((a,b)=>a[1].k.localeCompare(b[1].k,undefined,{numeric:true})).map(([t,v])=>`<button class="sub ${nTopic===t?'on':''}" data-act="nPick" data-s="${esc(s)}" data-t="${esc(t)}"><span>${esc(t)}</span><span>${v.n}</span></button>`).join(''):''}`).join('')}</div>
     </div>
-    <div>
+    <div class="ncol">
       <div class="tchips"><button class="tchip ${nType==='all'?'on':''}" data-act="nType" data-v="all">all<i>${inScope.length}</i></button>${NOTE_TYPES.filter(([k])=>tc[k]).map(([k,l])=>`<button class="tchip ${nType===k?'on':''}" data-act="nType" data-v="${k}">${l.toLowerCase()}<i>${tc[k]}</i></button>`).join('')}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="faint mono" style="font-size:11px">${list.length} note${list.length===1?'':'s'}${q&&ghIdx&&!ghAllP?' · searching titles…':''}</span><span class="seg">${[['topic','By topic'],['recent','Recent']].map(([k,l])=>`<button class="${nSort===k?'on':''}" style="padding:3px 9px;font-size:11px" data-act="nSort" data-v="${k}">${l}</button>`).join('')}</span></div>
       <div class="nlist">${list.map(x=>`<div class="nitem ${x.id===noteId?'on':''}" data-act="openNote" data-id="${esc(x.id)}"><div class="t">${x.pinned?'📌 ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ty-${x.type}">${x.type}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc([x.subject,x.topic].filter(Boolean).join(' · ')||(x.updated?ago(new Date(x.updated).toISOString()):''))}</span>${x.src==='github'?'<span title="From GitHub" style="margin-left:auto">⌥</span>':x.url?'<span title="Imported from Notion" style="margin-left:auto">N</span>':''}</div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub notes…':'Nothing matches.'}</div>`}</div>
@@ -1056,14 +1111,14 @@ function notesLib(){
   </div>`;
 }
 function ghViewer(n){
-  return `<div class="editor"><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:0"><div class="label">${esc(n.subject)}${n.area?' · '+esc(n.area):''} · ${esc(n.topic)}</div><div style="font-size:24px;font-weight:700;letter-spacing:-.02em">${esc(n.title)}</div></div>
+  return `<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:0"><div class="label">${esc(n.subject)}${n.area?' · '+esc(n.area):''} · ${esc(n.topic)}</div><div style="font-size:24px;font-weight:700;letter-spacing:-.02em">${esc(n.title)}</div></div>
     <span class="ty ty-${n.type}" style="margin-top:6px">${n.type}</span><a class="btn sm" href="${esc(n.url)}" target="_blank" rel="noopener">GitHub ↗</a></div>
     <div class="faint mono" style="font-size:11px">${esc(n.repo)}/${esc(n.path)} · read-only — edit it in your repo and push</div>
     <div class="prose" id="ghBody"><span class="faint pulse">Loading…</span></div></div>`;
 }
 function noteEditor(n){
   const all=allNotes(),subs=[...new Set(all.map(x=>x.subject).filter(Boolean))].sort(),tops=[...new Set(all.filter(x=>!n.subject||x.subject===n.subject).map(x=>x.topic).filter(Boolean))].sort();
-  return `<div class="editor"><div style="display:flex;gap:10px;align-items:center"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1;min-width:0">
+  return `<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1;min-width:0">
     <span class="seg"><button class="${noteMode==='edit'?'on':''}" data-act="nm" data-m="edit">Write</button><button class="${noteMode==='view'?'on':''}" data-act="nm" data-m="view">Preview</button></span>
     <button class="btn sm ghost" data-act="pinNote" title="Pin to top">${n.pinned?'📌':'📍'}</button><button class="btn sm danger ghost" data-act="delNote">Delete</button></div>
     <div class="nmeta"><input id="nSubj" list="dlSubj" placeholder="Subject" value="${esc(n.subject)}" style="width:120px"><input id="nTop" list="dlTop" placeholder="Topic" value="${esc(n.topic)}" style="width:170px">
@@ -1081,11 +1136,11 @@ function journal(){
   const months={};list.forEach(x=>(months[(x.date||'').slice(0,7)]??=[]).push(x));
   return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">${S.notes.filter(isJ).length} journal entries · private to you.</div></div>
   <div class="chips"><span class="seg"><button data-act="nView" data-v="notes">Notes</button><button class="on">Journal</button></span><button class="btn" data-act="newJournal" data-k="review">+ Weekly review</button><button class="btn pri" data-act="newJournal" data-k="daily">+ Today</button></div></div>
-  <div class="notes j">
+  <div class="notes j ${nOpen?'open':''}">
     <div class="nside"><input class="search" id="jQ" placeholder="Search journal…" value="${esc(jQ)}">
       ${Object.entries(months).map(([m,arr])=>`<div><div class="label" style="margin:4px 0 8px">${m?new Date(m+'-01T00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'}):'Undated'}</div><div class="nlist" style="max-height:none">${arr.map(x=>`<div class="nitem ${x.id===jId?'on':''}" data-act="openJ" data-id="${x.id}"><div class="t">${x.mood?MOODS[x.mood-1]+' ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ${x.kind==='review'?'ty-review':''}">${x.kind==='review'?'review':'daily'}</span><span>${x.date?fmtDate(x.date):''}</span></div></div>`).join('')}</div></div>`).join('')||'<div class="empty">No entries yet.</div>'}
     </div>
-    ${n?`<div class="editor"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1;min-width:200px">
+    ${n?`<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1;min-width:200px">
       <span class="seg"><button class="${noteMode==='edit'?'on':''}" data-act="nm" data-m="edit">Write</button><button class="${noteMode==='view'?'on':''}" data-act="nm" data-m="view">Preview</button></span><button class="btn sm danger ghost" data-act="delJ">Delete</button></div>
       <div class="nmeta"><input type="date" id="jDate" value="${esc(n.date||'')}"><span class="label" style="margin-left:6px">Mood</span><span class="mood">${MOODS.map((m,i)=>`<button class="${n.mood===i+1?'on':''}" data-act="jMood" data-v="${i+1}">${m}</button>`).join('')}</span></div>
       ${noteMode==='edit'?`<textarea id="nBody" placeholder="Start writing…">${esc(n.body)}</textarea>`:`<div class="prose">${md(n.body)}</div>`}</div>`:'<div class="empty">Write today\'s entry to get started.</div>'}
@@ -1221,7 +1276,10 @@ const del=(arr,id)=>()=>S[arr]=S[arr].filter(x=>x.id!==id);
 
 /* ---------------- actions ---------------- */
 const A={
-  go:d=>go(d.v), palette:openPal, lock,
+  go:d=>go(d.v), palette:()=>{$('#app').classList.remove('drawer');openPal()}, lock,
+  drawer:()=>$('#app').classList.toggle('drawer'),
+  sideToggle:()=>{const c=$('#app').classList.toggle('collapsed');localStorage.setItem('opuos.side',c?'1':'')},
+  timerBox:()=>{if($('#app').classList.contains('collapsed')&&innerWidth>980)A.sideToggle()},
   track:d=>{studyTrack=d.t;render()},
   cycle:d=>{const r=find('roadmap',d.id);r.status={todo:'doing',doing:'done',done:'todo'}[r.status];save();render()},
   addStep:()=>form('Roadmap item',stepF,{track:studyTrack||'',status:'todo'},o=>{S.roadmap.push({id:uid(),...normStep(o)});studyTrack=o.track}),
@@ -1262,17 +1320,18 @@ const A={
   lcEdit:d=>{const p=find('leetcode',d.id);form('Edit problem',[...lcF_,{k:'mistake',label:'Made a mistake?',type:'select',opts:[['false','No'],['true','Yes']]}],p,o=>Object.assign(p,o,{num:+o.num,mistake:o.mistake==='true'}),del('leetcode',d.id))},
   lcRound:()=>{if(confirm(`Start a new revision round? The ✓ marks reset (practice counts are kept). Last round: ${lcRevised()}/${S.leetcode.length} revised.`)){S.lcRound=today();save();render()}},
   /* notes */
-  nView:d=>{nView=d.v;noteMode=d.v==='journal'?'edit':noteMode;render()},
+  nView:d=>{nView=d.v;nOpen=false;noteMode=d.v==='journal'?'edit':noteMode;render()},
   nSrc:d=>{nSrc=d.v;render()},
-  nPick:d=>{nSubj=d.s;nTopic=d.t;nType='all';render()},
+  nPick:d=>{nSubj=d.s;nTopic=d.t;nType='all';nOpen=false;render()},
   nType:d=>{nType=d.v;render()},
   nSort:d=>{nSort=d.v;render()},
   nm:d=>{noteMode=d.m;render()},
-  openNote:d=>{noteId=d.id;render()},
+  openNote:d=>{noteId=d.id;nOpen=true;render();if(innerWidth<=980)scrollTo(0,0)},
+  nBack:()=>{nOpen=false;render()},
   ghNotes:()=>{toast('Reading your GitHub repos…');loadGhNotes(true)},
-  newNote:d=>{const n={id:uid(),type:'note',title:'',body:'',tags:[],subject:nSubj&&nSubj!=='Unsorted'?nSubj:'',topic:nTopic&&nTopic!=='General'?nTopic:'',updated:Date.now()};S.notes.push(n);noteId=n.id;nView='notes';nSrc='all';nType='all';nQ='';noteMode='edit';save();go('notes');setTimeout(()=>$('#nTitle')?.focus(),20)},
+  newNote:d=>{const n={id:uid(),type:'note',title:'',body:'',tags:[],subject:nSubj&&nSubj!=='Unsorted'?nSubj:'',topic:nTopic&&nTopic!=='General'?nTopic:'',updated:Date.now()};S.notes.push(n);noteId=n.id;nOpen=true;nView='notes';nSrc='all';nType='all';nQ='';noteMode='edit';save();go('notes');setTimeout(()=>$('#nTitle')?.focus(),20)},
   pinNote:()=>{const n=S.notes.find(x=>x.id===noteId);n.pinned=!n.pinned;save();render()},
-  delNote:()=>{if(confirm('Delete this note?')){S.notes=S.notes.filter(n=>n.id!==noteId);noteId=null;save();render()}},
+  delNote:()=>{if(confirm('Delete this note?')){S.notes=S.notes.filter(n=>n.id!==noteId);noteId=null;nOpen=false;save();render()}},
   newJournal:d=>{
     if(d.k==='daily'){const e=S.notes.find(n=>isJ(n)&&n.kind!=='review'&&n.date===today());if(e){jId=e.id;nView='journal';noteMode='edit';go('notes');return}}
     const rv=d.k==='review',p=curPlan();
@@ -1280,8 +1339,8 @@ const A={
       title:rv?'Weekly review — week of '+fmtLong(weekStart()):new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}),
       body:rv?`## Wins this week\n\n\n## What didn't go to plan\n\n\n## Topics that need relearning\n\n\n## Numbers\n\n- Study time: ${hm(weekMinutes())}\n- Plan days done: ${p?p.days.filter(x=>x.done).length+'/'+p.days.length:'—'}\n- LeetCode revised this round: ${lcRevised()}/${S.leetcode.length}\n- Reviews done: ${reviewsBetween(weekStart(),addDays(weekStart(),6))}\n\n## Next week's focus\n`
         :'## What I did today\n\n\n## What I learned\n\n\n## What blocked me\n\n\n## Tomorrow\n'};
-    S.notes.push(n);jId=n.id;nView='journal';noteMode='edit';save();go('notes');setTimeout(()=>$('#nBody')?.focus(),20)},
-  openJ:d=>{jId=d.id;render()},
+    S.notes.push(n);jId=n.id;nOpen=true;nView='journal';noteMode='edit';save();go('notes');setTimeout(()=>$('#nBody')?.focus(),20)},
+  openJ:d=>{jId=d.id;nOpen=true;render();if(innerWidth<=980)scrollTo(0,0)},
   jMood:d=>{const n=S.notes.find(x=>x.id===jId);n.mood=n.mood===+d.v?0:+d.v;save();render()},
   delJ:()=>{if(confirm('Delete this journal entry?')){S.notes=S.notes.filter(n=>n.id!==jId);jId=null;save();render()}},
   saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github,repos=$('#sRepos').value.split(',').map(x=>x.trim()).filter(Boolean);Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20,noteRepos:repos});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite();loadGhNotes(true)},
@@ -1308,7 +1367,7 @@ function renderTimer(){
   $('#timerRow').innerHTML=T.run?`<button class="btn sm" data-act="timerStop">■ Stop</button><button class="btn sm" data-act="timerLog">✓ Log now</button>`:`<button class="btn sm" data-act="timerStart" data-m="25">25</button><button class="btn sm" data-act="timerStart" data-m="50">50</button><button class="btn sm" data-act="timerStart" data-m="90">90</button>`;
   tick();
 }
-function tick(){const left=T.run?Math.max(0,T.end-Date.now()):T.mins*6e4;const m=Math.floor(left/6e4),s=Math.floor(left/1e3)%60;$('#timerT').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;document.title=T.run?`${$('#timerT').textContent} · focus — OPU/OS`:'OPU/OS — Command Center';if(T.run&&left<=0)finishTimer(false)}
+function tick(){const left=T.run?Math.max(0,T.end-Date.now()):T.mins*6e4;const m=Math.floor(left/6e4),s=Math.floor(left/1e3)%60;$('#timerT').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;$('#mTimer').textContent=T.run?'● '+$('#timerT').textContent:'';document.title=T.run?`${$('#timerT').textContent} · focus — OPU/OS`:'OPU/OS — Command Center';if(T.run&&left<=0)finishTimer(false)}
 function startTimer(m){T={run:true,mins:m,start:Date.now(),end:Date.now()+m*6e4,iv:setInterval(tick,500)};renderTimer();toast(`Focus ${m}m — go.`)}
 function stopTimer(){clearInterval(T.iv);T.run=false;renderTimer()}
 function finishTimer(early){
@@ -1362,8 +1421,9 @@ document.addEventListener('keydown',e=>{
     else if(e.key==='Enter'&&palList[palSel]){closePal();palList[palSel].f()}
     return;
   }
-  if(e.key==='Escape')closeModal();
+  if(e.key==='Escape'){closeModal();$('#app').classList.remove('drawer')}
   const tag=document.activeElement.tagName;if(['INPUT','TEXTAREA','SELECT'].includes(tag)||$('#modalWrap').classList.contains('on'))return;
+  if(e.key==='[')return A.sideToggle();
   const v=['dash','study','skills','projects','career','github','notes','links','settings'][+e.key-1];if(v)go(v);
 });
 window.addEventListener('hashchange',()=>{const v=location.hash.slice(1);if(v!==view&&views[v])go(v)});

@@ -41,7 +41,9 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 - **Ctrl+K command palette**: jump anywhere, run actions, and search *inside* every note
 - **Focus timer** (25 / 50 / 90 min) that logs a study session when it ends
 - **Skills, Projects, Career** (job pipeline board with follow-up reminders), **GitHub** stats and **Presence** links
-- **Keyboard shortcuts**: 1–9 switch sections
+- **Keyboard shortcuts**: 1–9 switch sections, `[` collapses or expands the sidebar
+- **Collapsible sidebar**: shrink it to an icon strip (the choice is remembered) to give the 3-column Notes view more room
+- **Mobile friendly**: a top bar with a ☰ menu drawer; on phones, Notes shows the list *or* the open note (with a Back button), and stat cards and tabs resize to fit
 
 ---
 
