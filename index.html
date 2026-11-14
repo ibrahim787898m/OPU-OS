@@ -173,6 +173,11 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .toast{position:fixed;bottom:22px;right:22px;background:var(--panel2);border:1px solid var(--line2);padding:10px 16px;border-radius:10px;font-family:var(--mono);font-size:13px;z-index:60;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none}
 .toast.on{opacity:1;transform:none}
 .status{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px}
+.linkbtn{background:none;border:none;color:var(--dim);cursor:pointer;font-family:var(--mono);font-size:12px;margin-top:16px;padding:0}
+.linkbtn:hover{color:var(--acc)}
+.sync{display:flex;align-items:center;gap:7px;background:none;border:1px solid var(--line);border-radius:9px;padding:7px 10px;font-family:var(--mono);font-size:11px;color:var(--dim);cursor:pointer;width:100%;text-align:left}
+.sync.ok{color:var(--acc)} .sync.err{color:var(--red)} .sync.busy,.sync.pending{color:var(--amber)}
+.steps{padding-left:18px;color:var(--dim);font-size:14px;margin-bottom:12px} .steps li{margin-bottom:4px}
 .status.up{color:var(--acc)} .status.down{color:var(--red)} .status.chk{color:var(--dim)}
 .pulse{animation:p 1.6s infinite}
 @keyframes p{50%{opacity:.35}}
@@ -206,6 +211,12 @@ tr:hover td{background:rgba(255,255,255,.015)}
       <div class="err" id="lockErr"></div>
       <button class="btn pri" style="width:100%;padding:12px;margin-top:6px" id="lockBtn">Unlock →</button>
     </form>
+    <button class="linkbtn" id="restoreToggle" type="button">↺ Restore from GitHub Gist</button>
+    <form id="restoreForm" style="display:none;margin-top:14px">
+      <input id="restoreToken" type="password" placeholder="GitHub token (gist scope)" autocomplete="off">
+      <div class="err" id="restoreErr"></div>
+      <button class="btn" style="width:100%;padding:12px;margin-top:6px" id="restoreBtn">Restore my data →</button>
+    </form>
   </div>
 </div>
 
@@ -223,6 +234,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <button class="nav" data-act="go" data-v="links"><span class="ico">@</span>Presence<kbd>8</kbd></button>
     <button class="nav" data-act="go" data-v="settings"><span class="ico">⚙</span>Settings<kbd>9</kbd></button>
     <div class="side-bottom">
+      <button class="sync" id="syncInd" data-act="go" data-v="settings"></button>
       <div class="timer" id="timer">
         <div class="label">Focus</div>
         <div class="t" id="timerT">25:00</div>
@@ -300,7 +312,68 @@ function seed(){
 }
 let S;
 function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){} if(!S)S=seed(),save()}
-function save(){localStorage.setItem(KEY,JSON.stringify(S))}
+function save(){S._t=Date.now();localStorage.setItem(KEY,JSON.stringify(S));schedulePush()}
+
+/* ---------------- cloud sync (private GitHub Gist) ----------------
+   Gist file opuos.json = {v, savedAt, hash, data}. Token + gist id live in
+   localStorage under opuos.sync (never inside exported data). Newest savedAt wins. */
+const SYNC='opuos.sync',GF='opuos.json';
+const syncCfg=()=>{try{return JSON.parse(localStorage.getItem(SYNC))}catch(e){return null}};
+let syncSt={s:'off',at:0,msg:''},pushT=null,unlocked=false;
+async function ghApi(path,opts={},token){
+  const t=token||syncCfg()?.token;
+  const r=await fetch('https://api.github.com/'+path,{...opts,cache:'no-store',headers:{Authorization:'Bearer '+t,Accept:'application/vnd.github+json',...(opts.body?{'Content-Type':'application/json'}:{})}});
+  if(!r.ok)throw new Error(r.status===401?'Invalid or expired token':r.status===404?'Not found — does the token have the gist scope?':r.status===403?'GitHub refused (rate limit or missing gist scope)':'GitHub error '+r.status);
+  return r.json();
+}
+async function findGist(token){
+  for(let p=1;p<=5;p++){const l=await ghApi(`gists?per_page=100&page=${p}`,{},token);const g=l.find(x=>x.files&&x.files[GF]);if(g)return g.id;if(l.length<100)break}
+  return null;
+}
+async function readGist(id,token){
+  const g=await ghApi('gists/'+id,{},token),f=g.files[GF];
+  if(!f)throw new Error('Gist has no '+GF);
+  return JSON.parse(f.truncated?await fetch(f.raw_url).then(r=>r.text()):f.content);
+}
+const payload=()=>JSON.stringify({v:1,savedAt:S._t||Date.now(),hash:localStorage.getItem(HKEY),data:S});
+function applyRemote(r){S=r.data;localStorage.setItem(KEY,JSON.stringify(S));if(r.hash)localStorage.setItem(HKEY,r.hash)}
+function schedulePush(){if(!syncCfg()?.gistId||!unlocked)return;clearTimeout(pushT);setSync('pending');pushT=setTimeout(pushGist,2500)}
+async function pushGist(){
+  const c=syncCfg();if(!c?.gistId)return;clearTimeout(pushT);pushT=null;setSync('busy');
+  try{await ghApi('gists/'+c.gistId,{method:'PATCH',body:JSON.stringify({files:{[GF]:{content:payload()}}})});setSync('ok')}
+  catch(e){setSync('err',e.message)}
+}
+async function pullGist(){
+  const c=syncCfg();if(!c?.gistId||pushT)return;setSync('busy');
+  try{
+    const r=await readGist(c.gistId);
+    if((r.savedAt||0)>(S._t||0)){applyRemote(r);render();toast('Pulled latest from cloud')}
+    else if((S._t||0)>(r.savedAt||0)){await pushGist();return}
+    setSync('ok');
+  }catch(e){setSync('err',e.message)}
+}
+async function connectSync(token){
+  setSync('busy');
+  try{
+    const id=await findGist(token);
+    if(id){
+      const r=await readGist(id,token);
+      localStorage.setItem(SYNC,JSON.stringify({token,gistId:id}));
+      if(confirm(`Found existing OPU/OS data in your GitHub (saved ${new Date(r.savedAt).toLocaleString()}).\n\nOK → load the cloud data into this browser\nCancel → overwrite the cloud with this browser's data`)){applyRemote(r);setSync('ok')}
+      else await pushGist();
+    }else{
+      const g=await ghApi('gists',{method:'POST',body:JSON.stringify({description:'OPU/OS data (do not delete)',public:false,files:{[GF]:{content:payload()}}})},token);
+      localStorage.setItem(SYNC,JSON.stringify({token,gistId:g.id}));setSync('ok');
+    }
+    toast('Cloud sync connected');render();
+  }catch(e){setSync('err',e.message);toast(e.message)}
+}
+function setSync(s,msg=''){syncSt={s,at:Date.now(),msg};const el=$('#syncInd');if(!el)return;
+  el.className='sync '+s;el.title=msg;
+  el.innerHTML={off:'☁ local only',pending:'☁ unsaved changes…',busy:'<span class="pulse">☁ syncing…</span>',ok:'☁ synced',err:'☁ sync error — see Settings'}[s];
+  const d=$('#syncDetail');if(d)d.textContent=s==='err'?msg:s==='ok'?'Last synced '+new Date().toLocaleTimeString():'';}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&unlocked)pullGist()});
+window.addEventListener('beforeunload',e=>{if(pushT){pushGist();e.preventDefault();e.returnValue=''}});
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),1800)}
 
 /* ---------------- lock ---------------- */
@@ -322,9 +395,21 @@ function initLock(){
     }
     sessionStorage.setItem(SKEY,'1');enter();
   };
+  $('#restoreToggle').onclick=()=>{const f=$('#restoreForm');f.style.display=f.style.display==='none'?'block':'none';$('#restoreToken').focus()};
+  $('#restoreForm').onsubmit=async e=>{
+    e.preventDefault();const token=$('#restoreToken').value.trim();if(!token)return;
+    $('#restoreErr').textContent='';$('#restoreBtn').textContent='Restoring…';
+    try{
+      const id=await findGist(token);
+      if(!id)throw new Error('No OPU/OS data found on this GitHub account. Connect sync in Settings on your other browser first.');
+      const r=await readGist(id,token);
+      localStorage.setItem(KEY,JSON.stringify(r.data));if(r.hash)localStorage.setItem(HKEY,r.hash);
+      localStorage.setItem(SYNC,JSON.stringify({token,gistId:id}));location.reload();
+    }catch(err){$('#restoreErr').textContent=err.message;$('#restoreBtn').textContent='Restore my data →'}
+  };
   if(has&&sessionStorage.getItem(SKEY))enter();
 }
-function enter(){$('#lock').style.display='none';$('#app').classList.add('on');load();go(location.hash.slice(1)||'dash');renderTimer();checkSite();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)}
+function enter(){$('#lock').style.display='none';$('#app').classList.add('on');load();unlocked=true;setSync(syncCfg()?.gistId?'ok':'off');pullGist();go(location.hash.slice(1)||'dash');renderTimer();checkSite();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)}
 function lock(){sessionStorage.removeItem(SKEY);location.reload()}
 
 /* ---------------- stats helpers ---------------- */
@@ -555,7 +640,7 @@ function paintSite(){const el=$('#siteStatus');if(!el)return;el.className='statu
 /* ---------------- SETTINGS ---------------- */
 function settings(){
   const s=S.settings;
-  return `<div class="head"><div><h2>Settings</h2><div class="sub">Your data stays in this browser. Export to back it up.</div></div><button class="btn" data-act="lock">⏻ Lock</button></div>
+  return `<div class="head"><div><h2>Settings</h2><div class="sub">${syncCfg()?.gistId?'Synced to your private GitHub Gist.':'Data is in this browser only — turn on cloud sync or export a backup.'}</div></div><button class="btn" data-act="lock">⏻ Lock</button></div>
   <div class="g g2">
     <div class="card"><h3>Profile</h3>
       <div class="field"><span class="label">Display name</span><input id="sName" value="${esc(s.name)}"></div>
@@ -564,6 +649,13 @@ function settings(){
       <div class="field"><span class="label">Weekly study goal (hours)</span><input id="sGoal" type="number" min="1" value="${s.weeklyGoal}"></div>
       <button class="btn pri" data-act="saveSettings">Save</button></div>
     <div class="g" style="align-content:start">
+      <div class="card"><h3>Cloud sync <span class="mono" style="text-transform:none;letter-spacing:0;color:${syncCfg()?.gistId?'var(--acc)':'var(--faint)'}">${syncCfg()?.gistId?'● connected':'○ off'}</span></h3>
+      ${syncCfg()?.gistId?`<div class="muted" style="font-size:14px;margin-bottom:12px">Your data saves to a private Gist a few seconds after each change. On a new browser, use <b>Restore from GitHub Gist</b> on the lock screen.</div>
+        <div class="chips"><button class="btn" data-act="syncNow">↻ Sync now</button><a class="btn" href="https://gist.github.com/${esc(syncCfg().gistId)}" target="_blank" rel="noopener">View Gist ↗</a><button class="btn danger" data-act="syncOff">Disconnect</button></div>
+        <div class="faint mono" id="syncDetail" style="font-size:12px;margin-top:10px"></div>`
+      :`<ol class="steps"><li><a href="https://github.com/settings/tokens/new?scopes=gist&description=OPU%2FOS%20sync" target="_blank" rel="noopener">Create a GitHub token ↗</a> with <b>only</b> the <code>gist</code> scope</li><li>Paste it below and connect</li></ol>
+        <div class="field"><input id="sTok" type="password" placeholder="ghp_…" autocomplete="off"></div><button class="btn pri" data-act="syncOn">Connect sync</button>
+        <div class="faint mono" id="syncDetail" style="font-size:12px;margin-top:10px"></div>`}</div>
       <div class="card"><h3>Data</h3><div class="chips"><button class="btn" data-act="export">⇩ Export JSON</button><button class="btn" data-act="import">⇧ Import JSON</button><button class="btn danger" data-act="reset">Reset everything</button></div><input type="file" id="impFile" accept=".json" style="display:none"></div>
       <div class="card"><h3>Security</h3><div class="field"><span class="label">New passphrase</span><input id="sPw" type="password"></div><button class="btn" data-act="changePw">Change passphrase</button>
       <div class="faint" style="font-size:12px;margin-top:10px">The lock is client-side — it keeps casual visitors out, not a determined attacker. Don't store secrets here.</div></div>
@@ -616,7 +708,10 @@ const A={
   newNote:d=>{const j=d.t==='journal';const n={id:uid(),type:d.t,title:j?new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):'',body:j?'## What I did today\n\n\n## What I learned\n\n\n## What blocked me\n\n\n## Tomorrow\n':'',updated:Date.now()};S.notes.push(n);noteId=n.id;noteMode='edit';save();go('notes');setTimeout(()=>(j?$('#nBody'):$('#nTitle'))?.focus(),20)},
   delNote:()=>{if(confirm('Delete this note?')){S.notes=S.notes.filter(n=>n.id!==noteId);noteId=null;save();render()}},
   saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github;Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite()},
-  changePw:async()=>{const v=$('#sPw').value;if(v.length<4)return toast('Min 4 characters');localStorage.setItem(HKEY,await hash(v));$('#sPw').value='';toast('Passphrase changed')},
+  changePw:async()=>{const v=$('#sPw').value;if(v.length<4)return toast('Min 4 characters');localStorage.setItem(HKEY,await hash(v));$('#sPw').value='';save();toast('Passphrase changed')},
+  syncOn:()=>{const t=$('#sTok').value.trim();if(t)connectSync(t)},
+  syncNow:async()=>{await pullGist();if(syncSt.s!=='err')await pushGist();toast(syncSt.s==='err'?syncSt.msg:'Synced')},
+  syncOff:()=>{if(confirm('Disconnect cloud sync on this browser? (Your Gist is kept.)')){localStorage.removeItem(SYNC);setSync('off');render()}},
   export:()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download=`opuos-backup-${today()}.json`;a.click()},
   import:()=>{const f=$('#impFile');f.onchange=()=>{const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.settings)throw 0;S=d;save();toast('Imported');render()}catch(e){toast('Invalid file')}};r.readAsText(f.files[0])};f.click()},
   reset:()=>{if(confirm('Wipe ALL data and start fresh?')){localStorage.removeItem(KEY);load();render();toast('Reset')}},
