@@ -123,8 +123,30 @@ main{padding:34px 40px 80px;max-width:1280px;width:100%}
 .lvl i.on{background:var(--acc)}
 
 /* notes */
-.notes{display:grid;grid-template-columns:280px 1fr;gap:16px;min-height:70vh}
-.nlist{display:flex;flex-direction:column;gap:6px;overflow:auto;max-height:75vh}
+.notes{display:grid;grid-template-columns:210px 290px minmax(0,1fr);gap:16px;min-height:70vh}
+.notes.j{grid-template-columns:290px minmax(0,1fr)}
+.nlist{display:flex;flex-direction:column;gap:6px;overflow:auto;max-height:78vh}
+.nside{display:flex;flex-direction:column;gap:14px;max-height:78vh;overflow:auto}
+.search{width:100%;padding:8px 12px;background:var(--panel);border:1px solid var(--line2);border-radius:9px;outline:none;font-size:14px}
+.search:focus{border-color:var(--acc)}
+.tree{display:flex;flex-direction:column;gap:2px}
+.tree button{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:7px;padding:5px 8px;color:var(--dim);cursor:pointer;font-size:13px}
+.tree button:hover{color:var(--text);background:var(--panel)}
+.tree button.on{color:var(--text);background:var(--panel2);border-color:var(--line2)}
+.tree button.sub{padding-left:20px;font-size:12.5px}
+.tree button span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree button span:last-child{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.tchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.tchip{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid var(--line2);background:none;color:var(--dim);cursor:pointer}
+.tchip.on{color:#0a0c10;background:var(--acc);border-color:var(--acc)}
+.tchip i{font-style:normal;opacity:.6;margin-left:4px}
+.ty{font-family:var(--mono);font-size:10px;padding:1px 7px;border-radius:20px;border:1px solid var(--line2);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;color:var(--dim)}
+.ty-lesson{color:var(--blue);border-color:rgba(110,168,254,.35)}.ty-quiz{color:var(--amber);border-color:rgba(255,198,92,.35)}.ty-practice{color:var(--pink);border-color:rgba(255,122,182,.35)}.ty-reflection,.ty-review{color:var(--acc);border-color:rgba(184,243,74,.35)}
+.nitem .meta{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;color:var(--faint);font-family:var(--mono);overflow:hidden;white-space:nowrap}
+.nmeta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.nmeta input,.nmeta select{background:var(--panel);border:1px solid var(--line2);border-radius:8px;padding:5px 9px;font-size:13px;outline:none;min-width:0}
+.nmeta input:focus,.nmeta select:focus{border-color:var(--acc)}
+.mood{display:inline-flex;gap:2px}.mood button{background:none;border:1px solid transparent;border-radius:7px;cursor:pointer;font-size:17px;padding:1px 4px;opacity:.35}.mood button.on{opacity:1;border-color:var(--line2);background:var(--panel2)}
 .nitem{padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--panel)}
 .nitem.on{border-color:var(--acc);background:var(--acc-d)}
 .nitem .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -137,7 +159,45 @@ main{padding:34px 40px 80px;max-width:1280px;width:100%}
 .prose code{font-family:var(--mono);background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:13px}
 .prose pre{background:#07080b;border:1px solid var(--line);padding:12px;border-radius:10px;overflow:auto;margin:10px 0}
 .prose pre code{background:none;padding:0}
-.prose ul{padding-left:20px}
+.prose ul,.prose ol{padding-left:22px;margin:6px 0}
+.prose ul.tasks{list-style:none;padding-left:4px}
+.prose li{margin:2px 0}
+.prose p{margin:4px 0}
+.prose h4{margin:12px 0 4px}
+.prose table{border-collapse:collapse;margin:10px 0;width:auto;max-width:100%;display:block;overflow:auto}
+.prose th,.prose td{border:1px solid var(--line2);padding:6px 10px;font-size:13.5px;text-transform:none;letter-spacing:0;font-family:var(--sans);color:var(--text)}
+.prose th{background:var(--panel2);font-weight:600}
+.prose blockquote{border-left:3px solid var(--line2);padding:4px 14px;color:var(--dim);margin:10px 0}
+.prose hr{border:none;border-top:1px solid var(--line);margin:16px 0}
+.prose input[type=checkbox]{margin-right:7px;accent-color:var(--acc)}
+.prose pre.txt{white-space:pre-wrap;font-family:var(--mono);font-size:13px;background:none;border:none;padding:0;margin:0}
+
+/* weekly plan */
+.days{display:flex;flex-direction:column;gap:8px}
+.day{display:grid;grid-template-columns:22px 96px minmax(0,1fr);gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+.day.today{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-d)}
+.day.done .pl{color:var(--dim)}
+.day .dn{font-weight:600;font-size:14px}.day .fo{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px}
+.day .pl{font-size:14px}
+.ck{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line2);background:none;cursor:pointer;display:grid;place-items:center;color:transparent;font-size:12px;font-weight:700;padding:0;flex:none;margin-top:1px}
+.ck:hover{border-color:var(--acc)}
+.ck.on{background:var(--acc);border-color:var(--acc);color:#0a0c10}
+.oc{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.oc:last-child{border-bottom:none}
+.oc.done .tx{color:var(--dim);text-decoration:line-through;text-decoration-color:var(--faint)}
+.watch li{margin-bottom:8px;font-size:14px;color:var(--dim)}
+details.more summary{cursor:pointer;color:var(--dim);font-family:var(--mono);font-size:12px;list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary::before{content:'▸ '}details.more[open] summary::before{content:'▾ '}
+.banner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border:1px solid rgba(184,243,74,.35);background:var(--acc-d);border-radius:12px;margin-bottom:16px;font-size:14px}
+.rv textarea{width:100%;min-height:54px;background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:8px 12px;outline:none;resize:vertical;font-size:14px}
+.rv textarea:focus{border-color:var(--acc)}
+
+/* leetcode */
+.lc td{vertical-align:top}
+.lc .ins{font-size:12.5px;color:var(--faint);margin-top:3px}
+.lc tr.mis td:first-child{box-shadow:inset 2px 0 var(--red)}
+.d-Easy{color:var(--acc)}.d-Medium{color:var(--amber)}.d-Hard{color:var(--red)}
 .seg{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden}
 .seg button{padding:6px 12px;background:none;border:none;cursor:pointer;color:var(--dim);font-size:13px}
 .seg button.on{background:var(--panel2);color:var(--text)}
@@ -192,7 +252,9 @@ tr:hover td{background:rgba(255,255,255,.015)}
   .side-bottom{width:100%;flex-direction:row}
   main{padding:24px 18px 60px}
   .g2,.g3,.g4{grid-template-columns:1fr}.span2,.span3{grid-column:auto}
-  .notes{grid-template-columns:1fr}
+  .notes,.notes.j{grid-template-columns:1fr}
+  .nside,.nlist{max-height:none}
+  .day{grid-template-columns:22px minmax(0,1fr)}.day .pl{grid-column:2}
 }
 </style>
 </head>
@@ -269,7 +331,8 @@ const ago=iso=>{const m=(Date.now()-new Date(iso))/6e4;if(m<60)return Math.round
 function seed(){
   const r=(track,arr,st={})=>arr.map((t,i)=>({id:uid(),track,title:t,status:st[i]||'todo'}));
   return {
-    settings:{name:'Ibrahim',github:'',site:'https://ibrahimmustafaopu.com',weeklyGoal:20},
+    settings:{name:'Ibrahim',github:'',site:'https://ibrahimmustafaopu.com',weeklyGoal:20,noteRepos:['math','dsa','cs50x']},
+    plans:[],leetcode:[],
     roadmap:[
       ...r('CS50X',['Week 0 · Scratch','Week 1 · C','Week 2 · Arrays','Week 3 · Algorithms','Week 4 · Memory','Week 5 · Data Structures','Week 6 · Python','Week 7 · SQL','Week 8 · HTML, CSS, JavaScript','Week 9 · Flask','Week 10 · Final Project']),
       ...r('DSA',['Arrays & Hashing','Two Pointers','Sliding Window','Stack','Binary Search','Linked List','Trees','Tries','Heap / Priority Queue','Backtracking','Graphs','Dynamic Programming']),
@@ -311,7 +374,13 @@ function seed(){
   };
 }
 let S;
-function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){} if(!S)S=seed(),save()}
+function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){} if(!S)S=seed(),save(); migrate()}
+/* Upgrades older saved data in place — never wipes anything. */
+function migrate(){
+  S.settings.noteRepos??=['math','dsa','cs50x'];
+  S.plans??=[];S.leetcode??=[];S.lcRound??=today();
+  S.notes.forEach(n=>{n.tags??=[];n.subject??='';n.topic??='';if(n.type==='journal')n.date??=dstr(new Date(n.updated||Date.now()))});
+}
 function save(){S._t=Date.now();localStorage.setItem(KEY,JSON.stringify(S));schedulePush()}
 
 /* ---------------- cloud sync (private GitHub Gist) ----------------
@@ -336,7 +405,7 @@ async function readGist(id,token){
   return JSON.parse(f.truncated?await fetch(f.raw_url).then(r=>r.text()):f.content);
 }
 const payload=()=>JSON.stringify({v:1,savedAt:S._t||Date.now(),hash:localStorage.getItem(HKEY),data:S});
-function applyRemote(r){S=r.data;localStorage.setItem(KEY,JSON.stringify(S));if(r.hash)localStorage.setItem(HKEY,r.hash)}
+function applyRemote(r){S=r.data;migrate();localStorage.setItem(KEY,JSON.stringify(S));if(r.hash)localStorage.setItem(HKEY,r.hash)}
 function schedulePush(){if(!syncCfg()?.gistId||!unlocked)return;clearTimeout(pushT);setSync('pending');pushT=setTimeout(pushGist,2500)}
 async function pushGist(){
   const c=syncCfg();if(!c?.gistId)return;clearTimeout(pushT);pushT=null;setSync('busy');
@@ -409,7 +478,7 @@ function initLock(){
   };
   if(has&&sessionStorage.getItem(SKEY))enter();
 }
-function enter(){$('#lock').style.display='none';$('#app').classList.add('on');load();unlocked=true;setSync(syncCfg()?.gistId?'ok':'off');pullGist();go(location.hash.slice(1)||'dash');renderTimer();checkSite();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)}
+function enter(){$('#lock').style.display='none';$('#app').classList.add('on');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');pullGist();go(location.hash.slice(1)||'dash');renderTimer();checkSite();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)}
 function lock(){sessionStorage.removeItem(SKEY);location.reload()}
 
 /* ---------------- stats helpers ---------------- */
@@ -424,7 +493,7 @@ const hm=m=>m>=60?`${Math.floor(m/60)}h ${m%60?m%60+'m':''}`.trim():`${m}m`;
 /* ---------------- router ---------------- */
 let view='dash';
 const views={dash,study,skills,projects,career,github,notes,links,settings};
-function go(v){if(!views[v])v='dash';view=v;location.hash=v;document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.v===v));render();window.scrollTo(0,0)}
+function go(v){if(!views[v])v='dash';view=v;if(v==='notes')loadGhNotes();location.hash=v;document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.v===v));render();window.scrollTo(0,0)}
 function render(){$('#main').innerHTML=`<div class="fade">${views[view]()}</div>`;after[view]?.()}
 const after={};
 
@@ -434,22 +503,28 @@ function dash(){
   const wm=weekMinutes(),goal=S.settings.weeklyGoal*60,active=S.jobs.filter(j=>['applied','interview'].includes(j.status)).length;
   const doing=S.roadmap.filter(r=>r.status==='doing');
   const due=S.jobs.filter(j=>j.followUp&&j.followUp<=addDays(today(),3)&&!['rejected','offer'].includes(j.status)).sort((a,b)=>a.followUp.localeCompare(b.followUp));
-  const gh=S.gh;
+  const gh=S.gh,nx=nextUp(),p=curPlan(),td=p?planToday(p):null;
+  const tracks=tracksList().map(t=>[t,S.roadmap.filter(r=>r.track===t).length]).sort((a,b)=>b[1]-a[1]).slice(0,4).map(x=>x[0]);
   return `
   <div class="hero">
     <div><div class="label">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
     <h2>${greet}, <em>${esc(S.settings.name)}</em>.</h2>
-    <div class="muted" style="margin-top:6px">${doing.length?`Currently on: ${doing.map(d=>esc(d.title)).join(' · ')}`:'Pick something from your roadmap to start today.'}</div></div>
+    <div class="muted" style="margin-top:6px">${doing.length?`Currently on: ${doing.map(d=>esc(d.title)).join(' · ')}`:nx?`Next up: Step ${nx.step} · ${esc(nx.title)}`:'Pick something from your roadmap to start today.'}</div></div>
     <div class="chips"><button class="btn" data-act="logSession">+ Log session</button><button class="btn" data-act="addJob">+ Application</button><button class="btn pri" data-act="timerStart" data-m="25">▶ Focus 25</button></div>
   </div>
   <div class="g g4">
     <div class="card stat"><div class="label">This week</div><div class="v">${(wm/60).toFixed(1)}<small> / ${S.settings.weeklyGoal}h</small></div><div class="meter"><i style="width:${Math.min(100,wm/goal*100)}%"></i></div></div>
     <div class="card stat"><div class="label">Study streak</div><div class="v">${streak()}<small> day${streak()===1?'':'s'}</small></div><div class="k faint mono" style="font-size:12px">${hm(S.sessions.reduce((a,s)=>a+(+s.minutes||0),0))} all-time</div></div>
-    <div class="card stat"><div class="label">Problems solved</div><div class="v">${solved()}</div><div class="k faint mono" style="font-size:12px">DSA roadmap ${pct('DSA')}%</div></div>
+    <div class="card stat clickable" data-act="studyTab" data-t="leetcode"><div class="label">LeetCode solved</div><div class="v">${S.leetcode.length||solved()}</div><div class="k faint mono" style="font-size:12px">${S.leetcode.length?`revised ${lcRevised()}/${S.leetcode.length} this round`:`DSA roadmap ${pct('DSA')}%`}</div></div>
+
     <div class="card stat"><div class="label">Active applications</div><div class="v">${active}</div><div class="k faint mono" style="font-size:12px">${S.jobs.filter(j=>j.status==='interview').length} interviewing</div></div>
+    <div class="card" style="grid-column:1/-1"><h3><span>Today${p?` · ${esc(p.title||'Week of '+fmtDate(p.week))}`:''}</span><button class="btn sm ghost" data-act="studyTab" data-t="week">Weekly plan →</button></h3>
+      ${td?`<div style="display:flex;gap:12px;align-items:flex-start"><button class="ck ${td.d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${td.i}">✓</button><div><div><strong>${esc(td.d.day)}</strong> <span class="pill" style="margin-left:6px">${esc(td.d.focus||'—')}</span></div><div style="margin-top:6px">${inl(esc(td.d.plan))}</div></div></div>`
+      :p?`<div class="empty">Nothing planned for today in this week's plan.</div>`:`<div class="empty">No weekly plan yet. <button class="btn sm" data-act="pastePlan">+ Add weekly plan</button></div>`}
+    </div>
 
     <div class="card span3"><h3>Study activity · last 30 weeks <span class="faint" style="text-transform:none;letter-spacing:0">${S.sessions.length} sessions</span></h3><div id="heat"></div></div>
-    <div class="card"><h3>Roadmap</h3>${['CS50X','DSA','Security'].map(t=>`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between"><span>${t}</span><span class="mono muted">${pct(t)}%</span></div><div class="meter" style="margin-top:6px"><i style="width:${pct(t)}%;background:${t==='CS50X'?'var(--acc)':t==='DSA'?'var(--blue)':'var(--pink)'}"></i></div></div>`).join('')}</div>
+    <div class="card clickable" data-act="studyTab" data-t="roadmap"><h3>Roadmap</h3>${tracks.map((t,i)=>`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between"><span>${esc(t)}</span><span class="mono muted">${pct(t)}%</span></div><div class="meter" style="margin-top:6px"><i style="width:${pct(t)}%;background:${LC[i%LC.length]}"></i></div></div>`).join('')}</div>
 
     <div class="card span2"><h3>Last 7 days</h3><div id="bars"></div></div>
     <div class="card span2"><h3>Follow-ups due <button class="btn sm ghost" data-act="go" data-v="career">Career →</button></h3>
@@ -487,32 +562,209 @@ function drawBars(){
 }
 
 /* ---------------- STUDY ---------------- */
-let studyTrack='CS50X';
+let studyTrack=null,studyTab='week',planId=null,lcF='all';
+const stepSort=(a,b)=>(a.step??1e9)-(b.step??1e9);
+const nextUp=()=>S.roadmap.filter(r=>r.status!=='done'&&r.step!=null&&r.step<100).sort(stepSort)[0];
 function study(){
-  const tracks=[...new Set(S.roadmap.map(r=>r.track))];
-  const items=S.roadmap.filter(r=>r.track===studyTrack);
-  const ses=[...S.sessions].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,25);
-  return `
-  <div class="head"><div><h2>Study</h2><div class="sub">Roadmap, sessions, and the grind — tracked.</div></div>
-  <div class="chips"><button class="btn" data-act="addStep">+ Roadmap item</button><button class="btn pri" data-act="logSession">+ Log session</button></div></div>
-  <div class="g g2">
-    <div class="card"><h3><span>Roadmap</span><span class="seg">${tracks.map(t=>`<button class="${t===studyTrack?'on':''}" data-act="track" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</span></h3>
-      <div class="meter" style="margin:-4px 0 14px"><i style="width:${pct(studyTrack)}%"></i></div>
-      <div class="track">${items.map((r,i)=>`<div class="step ${r.status}"><span class="n">${String(i+1).padStart(2,'0')}</span><span class="title">${esc(r.title)}</span><button class="pill ${r.status} clickable" style="background:none" data-act="cycle" data-id="${r.id}"><span class="dot"></span>${r.status}</button><button class="btn sm ghost" data-act="editStep" data-id="${r.id}">✎</button></div>`).join('')||'<div class="empty">No items yet.</div>'}</div>
-      <div class="faint mono" style="font-size:11px;margin-top:10px">click a status to cycle todo → doing → done</div>
+  const tabs=[['week','This week'],['roadmap','Roadmap'],['leetcode','LeetCode'],['sessions','Sessions']];
+  const btns={week:`<button class="btn pri" data-act="pastePlan">+ Add weekly plan</button>`,
+    roadmap:`<button class="btn" data-act="addStep">+ Roadmap item</button>`,
+    leetcode:`<button class="btn" data-act="lcRound">↻ New revision round</button><button class="btn pri" data-act="lcAdd">+ Problem</button>`,
+    sessions:`<button class="btn pri" data-act="logSession">+ Log session</button>`}[studyTab];
+  return `<div class="head"><div><h2>Study</h2><div class="sub">Weekly plan, roadmap, LeetCode revision and sessions.</div></div>
+  <div class="chips"><span class="seg">${tabs.map(([k,l])=>`<button class="${studyTab===k?'on':''}" data-act="studyTab" data-t="${k}">${l}</button>`).join('')}</span>${btns}</div></div>
+  ${{week:studyWeek,roadmap:studyRoadmap,leetcode:studyLC,sessions:studySessions}[studyTab]()}`;
+}
+
+/* ----- roadmap ----- */
+function studyRoadmap(){
+  const tracks=tracksList().sort((a,b)=>S.roadmap.filter(r=>r.track===b).length-S.roadmap.filter(r=>r.track===a).length);
+  if(!studyTrack||!tracks.includes(studyTrack))studyTrack=tracks.includes(nextUp()?.track)?nextUp().track:tracks[0];
+  const items=S.roadmap.filter(r=>r.track===studyTrack).sort(stepSort),nx=nextUp();
+  return `${nx?`<div class="banner"><span><span class="label" style="margin-right:8px">Next up</span><strong>Step ${nx.step}</strong> · ${esc(nx.title)} <span class="faint">(${esc(nx.track)})</span></span>${nx.url?`<a class="btn sm" href="${esc(nx.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}</div>`:''}
+  <div class="card"><h3><span class="seg" style="flex-wrap:wrap">${tracks.map(t=>`<button class="${t===studyTrack?'on':''}" data-act="track" data-t="${esc(t)}">${esc(t)} <span class="faint">${pct(t)}%</span></button>`).join('')}</span></h3>
+    <div class="meter" style="margin:-4px 0 14px"><i style="width:${pct(studyTrack)}%"></i></div>
+    <div class="track">${items.map((r,i)=>`<div class="step ${r.status}"><span class="n">${r.step!=null?r.step:'·'}</span><span class="title">${esc(r.title)}${r.notes?`<div class="faint" style="font-size:12px">${esc(r.notes)}</div>`:''}</span>
+      ${r.phase?`<span class="pill">${esc(r.phase)}</span>`:''}${r.difficulty?`<span class="mono d-${esc(r.difficulty)}" style="font-size:11px">${esc(r.difficulty)}</span>`:''}
+      ${r.url?`<a class="btn sm ghost" href="${esc(r.url)}" target="_blank" rel="noopener" title="Open in Notion">↗</a>`:''}
+      <button class="pill ${r.status} clickable" style="background:none" data-act="cycle" data-id="${r.id}"><span class="dot"></span>${r.status}</button><button class="btn sm ghost" data-act="editStep" data-id="${r.id}">✎</button></div>`).join('')||'<div class="empty">No items in this track.</div>'}</div>
+    <div class="faint mono" style="font-size:11px;margin-top:10px">click a status to cycle todo → doing → done</div></div>`;
+}
+
+/* ----- sessions ----- */
+function studySessions(){
+  const ses=[...S.sessions].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,40);
+  return `<div class="g g3" style="margin-bottom:16px">
+      <div class="card stat"><div class="label">Week</div><div class="v">${(weekMinutes()/60).toFixed(1)}<small>h</small></div></div>
+      <div class="card stat"><div class="label">Streak</div><div class="v">${streak()}<small>d</small></div></div>
+      <div class="card stat"><div class="label">Logged problems</div><div class="v">${solved()}</div></div></div>
+    <div class="card"><h3>Recent sessions</h3>
+    ${ses.length?`<table><tr><th>Date</th><th>Topic</th><th>Time</th><th>#</th><th></th></tr>${ses.map(s=>`<tr><td class="mono muted">${fmtDate(s.date)}</td><td>${esc(s.topic)}<div class="faint" style="font-size:12px">${esc(s.track||'')}</div></td><td class="mono">${hm(+s.minutes)}</td><td class="mono muted">${+s.problems||''}</td><td style="text-align:right"><button class="btn sm ghost" data-act="editSession" data-id="${s.id}">✎</button></td></tr>`).join('')}</table>`:'<div class="empty">No sessions yet — use the focus timer or log one.</div>'}
+    </div>`;
+}
+
+/* ----- weekly plan ----- */
+const MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function parseDate(s){
+  let m=s.match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return new Date(+m[1],m[2]-1,+m[3]);
+  m=s.match(/(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?,?\s+(\d{4})/);if(m&&MON[m[2].toLowerCase()]!=null)return new Date(+m[3],MON[m[2].toLowerCase()],+m[1]);
+  m=s.match(/([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),?\s+(\d{4})/);if(m&&MON[m[1].toLowerCase()]!=null)return new Date(+m[3],MON[m[1].toLowerCase()],+m[2]);
+  return null;
+}
+const mondayOf=d=>{d=new Date(d);d.setDate(d.getDate()-((d.getDay()+6)%7));return dstr(d)};
+const fmtLong=s=>new Date(s+'T00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+/* Turns the Sunday planner's page (Markdown, as pasted or imported) into a structured plan. */
+function parsePlan(src,week){
+  const lines=src.replace(/\r/g,'').replace(/<br\s*\/?>/gi,'\n').split('\n');
+  const p={id:uid(),title:'',week:week||'',intro:'',outcomes:[],outcomesNote:'',days:[],daysNote:'',watch:[],review:[],extra:'',raw:src,added:Date.now()};
+  const buf={intro:[],outcomes:[],days:[],watch:[],review:[],extra:[]};let sec='intro';
+  for(const l of lines){
+    // headings arrive as "## Day by day" (Markdown) or as a bare line (plain-text paste)
+    const h=l.match(/^#{1,4}\s+(.*)/)||l.trim().match(/^((?:\d+\s+)?must-do outcomes|day by day|watch out|end of week review.*)$/i);
+    if(h){const t=h[1].toLowerCase();
+      if(/week of/.test(t)&&!p.title&&sec==='intro'){p.title=h[1].replace(/^[^A-Za-z]+/,'').trim();continue}
+      sec=/must|outcome|goal/.test(t)?'outcomes':/day by day|schedule|daily|days/.test(t)?'days':/watch|risk/.test(t)?'watch':/review/.test(t)?'review':'extra';
+      if(sec==='extra')buf.extra.push(l);continue}
+    if(sec==='intro'&&!p.title&&/^\W*week of\b/i.test(l.trim())){p.title=l.trim().replace(/^[^A-Za-z]+/,'');continue}
+    buf[sec].push(l);
+  }
+  p.intro=buf.intro.map(l=>l.replace(/^>\s?/,'')).join('\n').trim();
+  const items=arr=>{const out=[];let inItem=false;for(const l of arr){const m=l.match(/^\s*(?:\d+[.)]|[-*•])\s+(.*)/);if(m){out.push(m[1].trim());inItem=true}else if(l.trim()&&inItem&&/^\s{2,}/.test(l))out[out.length-1]+=' '+l.trim();else inItem=false}return out};
+  p.outcomes=items(buf.outcomes).map(text=>({text,done:false}));
+  p.outcomesNote=buf.outcomes.filter(l=>l.trim()&&!/^\s*(\d+[.)]|[-*•])\s/.test(l)).join(' ').trim();
+  const notes=[];
+  for(const l of buf.days){
+    const t=l.trim();if(!t)continue;
+    let cells=null;
+    if(t.startsWith('|'))cells=t.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+    else if(t.includes('\t'))cells=t.split('\t').map(c=>c.trim());
+    if(!cells){notes.push(t);continue}
+    if(cells.every(c=>/^:?-{2,}:?$/.test(c)||!c)||/^day$/i.test(cells[0]))continue;
+    p.days.push(cells.length>=3?{day:cells[0],focus:cells[1],plan:cells.slice(2).join(' '),done:false}:{day:cells[0],focus:'',plan:cells[1]||'',done:false});
+  }
+  p.daysNote=notes.join(' ');
+  p.watch=items(buf.watch).filter(Boolean);
+  p.review=buf.review.map(l=>l.match(/^\s*[-*•]\s+([^:]+):\s*(.*)$/)).filter(Boolean).map(m=>({q:m[1].trim(),a:m[2].trim()}));
+  p.extra=buf.extra.join('\n').trim();
+  if(!p.week){const d=parseDate(p.title)||parseDate(p.intro.slice(0,200));if(d)p.week=mondayOf(d)}
+  if(!p.week)p.week=defaultPlanWeek();
+  if(!p.title)p.title='Week of '+fmtLong(p.week);
+  p.days.forEach((d,i)=>{const n=+(d.day.match(/\b(\d{1,2})\b/)||[])[1];let dt=addDays(p.week,i);if(n){for(let k=0;k<7;k++){const c=addDays(p.week,k);if(+c.slice(8)===n){dt=c;break}}}d.date=dt});
+  return p;
+}
+const defaultPlanWeek=()=>new Date().getDay()===0?addDays(weekStart(),7):weekStart();
+function curPlan(){
+  if(planId){const p=S.plans.find(x=>x.id===planId);if(p)return p}
+  const ws=weekStart(),sorted=[...S.plans].sort((a,b)=>b.week.localeCompare(a.week));
+  return sorted.find(p=>p.week===ws)||sorted.find(p=>p.week<ws)||sorted.at(-1);
+}
+const planToday=p=>{const i=p.days.findIndex(d=>d.date===today());return i<0?null:{i,d:p.days[i]}};
+function studyWeek(){
+  const p=curPlan();
+  if(!p)return `<div class="card" style="max-width:640px"><h3>No weekly plan yet</h3><p class="muted" style="margin-bottom:14px">Each Sunday, open the new <b>Week of …</b> page in Notion, press <b>Ctrl+A</b> then <b>Ctrl+C</b>, and paste it here. The day-by-day table becomes a checklist.</p><button class="btn pri" data-act="pastePlan">+ Add weekly plan</button></div>`;
+  const ws=weekStart(),nextP=S.plans.find(x=>x.week===addDays(ws,7)),isCur=p.week===ws;
+  const dd=p.days.filter(d=>d.done).length,od=p.outcomes.filter(o=>o.done).length;
+  const hist=[...S.plans].sort((a,b)=>b.week.localeCompare(a.week));
+  return `${nextP&&nextP.id!==p.id?`<div class="banner"><span>📅 Next week's plan is ready: <strong>${esc(nextP.title)}</strong></span><button class="btn sm" data-act="openPlan" data-id="${nextP.id}">View →</button></div>`:''}
+  ${!isCur&&p.week<ws&&!nextP?`<div class="banner" style="border-color:rgba(255,198,92,.35);background:rgba(255,198,92,.08)"><span>No plan for this week yet — showing the latest one.</span><button class="btn sm" data-act="pastePlan">+ Add this week's plan</button></div>`:''}
+  <div class="g g3">
+    <div class="card span2"><h3><span>${esc(p.title)}${isCur?' <span class="pill done" style="margin-left:6px">this week</span>':''}</span>
+      <span class="chips"><select class="btn sm" id="planSel">${hist.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.title)}</option>`).join('')}</select>${p.url?`<a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}<button class="btn sm ghost danger" data-act="delPlan" data-id="${p.id}">Delete</button></span></h3>
+      <div style="display:flex;justify-content:space-between" class="mono muted"><span style="font-size:12px">${dd}/${p.days.length} days done</span><span style="font-size:12px">${p.days.length?Math.round(dd/p.days.length*100):0}%</span></div>
+      <div class="meter" style="margin:6px 0 16px"><i style="width:${p.days.length?dd/p.days.length*100:0}%"></i></div>
+      <div class="days">${p.days.map((d,i)=>`<div class="day ${d.done?'done':''} ${d.date===today()?'today':''}"><button class="ck ${d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${i}" title="Mark done">✓</button><div><div class="dn">${esc(d.day)}</div><div class="fo">${esc(d.focus)}</div></div><div class="pl">${inl(esc(d.plan))}</div></div>`).join('')||'<div class="empty">No day-by-day table found in this plan.</div>'}</div>
+      ${p.daysNote?`<div class="faint" style="font-size:13px;margin-top:12px">${inl(esc(p.daysNote))}</div>`:''}
     </div>
     <div class="g" style="align-content:start">
-      <div class="g g3">
-        <div class="card stat"><div class="label">Week</div><div class="v">${(weekMinutes()/60).toFixed(1)}<small>h</small></div></div>
-        <div class="card stat"><div class="label">Streak</div><div class="v">${streak()}<small>d</small></div></div>
-        <div class="card stat"><div class="label">Solved</div><div class="v">${solved()}</div></div>
-      </div>
-      <div class="card"><h3>Recent sessions</h3>
-      ${ses.length?`<table><tr><th>Date</th><th>Topic</th><th>Time</th><th>#</th><th></th></tr>${ses.map(s=>`<tr><td class="mono muted">${fmtDate(s.date)}</td><td>${esc(s.topic)}<div class="faint" style="font-size:12px">${esc(s.track||'')}</div></td><td class="mono">${hm(+s.minutes)}</td><td class="mono">${s.problems||''}</td><td><button class="btn sm ghost" data-act="editSession" data-id="${s.id}">✎</button></td></tr>`).join('')}</table>`:'<div class="empty">No sessions yet — start the focus timer or log one.</div>'}
-      </div>
+      <div class="card"><h3><span>Must-do outcomes</span>${p.outcomes.length?`<span class="mono faint" style="text-transform:none">${od}/${p.outcomes.length}</span>`:''}</h3>
+        ${p.outcomes.map((o,i)=>`<div class="oc ${o.done?'done':''}"><button class="ck ${o.done?'on':''}" data-act="pOut" data-p="${p.id}" data-i="${i}">✓</button><div class="tx">${inl(esc(o.text))}</div></div>`).join('')||`<div class="muted" style="font-size:14px">${inl(esc(p.outcomesNote||'None listed.'))}</div>`}</div>
+      ${p.watch.length?`<div class="card"><h3>Watch out</h3><details class="more" ${p.watch.length<=3?'open':''}><summary>${p.watch.length} note${p.watch.length===1?'':'s'}</summary><ul class="watch" style="padding-left:18px;margin-top:10px">${p.watch.map(w=>`<li>${inl(esc(w))}</li>`).join('')}</ul></details></div>`:''}
+      ${p.intro?`<div class="card"><h3>Planner notes</h3><details class="more"><summary>show</summary><div class="prose" style="min-height:0;padding:12px 0 0;border:none;background:none;font-size:13.5px">${md(p.intro)}</div></details></div>`:''}
     </div>
+    ${p.review.length?`<div class="card span3 rv"><h3><span>End of week review</span><button class="btn sm" data-act="reviewToJournal" data-id="${p.id}">Save to journal →</button></h3>
+      <div class="g g2">${p.review.map((r,i)=>`<div class="field"><span class="label">${esc(r.q)}</span><textarea data-rv="${i}" placeholder="…">${esc(r.a)}</textarea></div>`).join('')}</div></div>`:''}
+    ${p.extra?`<div class="card span3"><div class="prose" style="min-height:0;border:none;padding:0;background:none">${md(p.extra)}</div></div>`:''}
   </div>`;
 }
+after.study=()=>{
+  const sel=$('#planSel');if(sel)sel.onchange=()=>{planId=sel.value;render()};
+  const p=curPlan();if(!p)return;
+  document.querySelectorAll('[data-rv]').forEach(t=>t.oninput=()=>{p.review[+t.dataset.rv].a=t.value;save()});
+};
+/* Notion copies rich HTML; convert it to Markdown so tables survive the paste. */
+function htmlToMd(html){
+  const doc=new DOMParser().parseFromString(html,'text/html'),out=[];
+  const inline=n=>[...n.childNodes].map(c=>{if(c.nodeType===3)return c.textContent.replace(/\s+/g,' ');if(c.nodeType!==1)return '';const t=c.tagName,s=inline(c);
+    if(t==='B'||t==='STRONG')return s.trim()?`**${s.trim()}**`:'';if(t==='EM'||t==='I')return s.trim()?`*${s.trim()}*`:'';if(t==='CODE')return '`'+c.textContent+'`';
+    if(t==='A'&&/^https?:/.test(c.getAttribute('href')||''))return `[${s.trim()}](${c.getAttribute('href')})`;if(t==='BR')return '\n';
+    if(/^(DIV|P|LI)$/.test(t))return s+' ';return s}).join('');
+  const walk=(n,depth=0)=>{for(const c of n.childNodes){
+    if(c.nodeType===3){const t=c.textContent.trim();if(t)out.push(t);continue}
+    if(c.nodeType!==1)continue;const t=c.tagName;
+    if(/^H[1-6]$/.test(t))out.push('','#'.repeat(Math.min(+t[1],3))+' '+inline(c).trim(),'');
+    else if(t==='P'){const s=inline(c).trim();if(s)out.push(s,'')}
+    else if(t==='BLOCKQUOTE'){inline(c).trim().split('\n').forEach(x=>out.push('> '+x.trim()));out.push('')}
+    else if(t==='UL'||t==='OL'){[...c.children].forEach((li,i)=>{const own=li.cloneNode(true);own.querySelectorAll('ul,ol').forEach(x=>x.remove());out.push('  '.repeat(depth)+(t==='OL'?`${i+1}. `:'- ')+inline(own).trim());li.querySelectorAll(':scope > ul, :scope > ol').forEach(x=>{const w=document.createElement('div');w.appendChild(x.cloneNode(true));walk(w,depth+1)})});out.push('')}
+    else if(t==='TABLE'){const rows=[...c.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>inline(td).replace(/\|/g,'/').replace(/\s+/g,' ').trim()));if(rows.length){out.push('| '+rows[0].join(' | ')+' |','| '+rows[0].map(()=>'---').join(' | ')+' |');rows.slice(1).forEach(r=>out.push('| '+r.join(' | ')+' |'));out.push('')}}
+    else if(t==='PRE')out.push('```',c.textContent,'```','');
+    else if(t==='HR')out.push('---','');
+    else if(/^(SCRIPT|STYLE|META|TITLE)$/.test(t)){}
+    else walk(c,depth)}};
+  walk(doc.body);return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+function pastePlanModal(){
+  $('#modal').innerHTML=`<h3>Add weekly plan</h3>
+    <p class="muted" style="font-size:14px;margin:-6px 0 14px">In Notion, open the new <b>Week of …</b> page, press <b>Ctrl+A</b> then <b>Ctrl+C</b>, and paste below.</p>
+    <div class="field"><span class="label">Week starting (Monday)</span><input type="date" id="pWeek" value="${defaultPlanWeek()}"></div>
+    <div class="field"><textarea id="pTxt" style="min-height:240px;font-family:var(--mono);font-size:12.5px" placeholder="Paste the plan here…"></textarea></div>
+    <div id="pPrev" class="mono faint" style="font-size:12px;min-height:18px"></div>
+    <div class="mfoot"><button class="btn" id="mCancel">Cancel</button><button class="btn pri" id="mSave">Save plan</button></div>`;
+  $('#modalWrap').classList.add('on');
+  const ta=$('#pTxt'),wk=$('#pWeek'),pv=$('#pPrev');let weekTouched=false;
+  setTimeout(()=>ta.focus(),30);
+  wk.onchange=()=>weekTouched=true;
+  const preview=()=>{const v=ta.value.trim();if(!v){pv.textContent='';return}
+    const p=parsePlan(v,weekTouched?wk.value:'');if(!weekTouched)wk.value=p.week;
+    pv.innerHTML=`Found: <span style="color:var(--acc)">${esc(p.title)}</span> · ${p.days.length} days · ${p.outcomes.length} outcomes · ${p.watch.length} watch-outs${p.days.length?'':' — <span style="color:var(--amber)">no day-by-day table found</span>'}`};
+  ta.addEventListener('paste',e=>{const h=e.clipboardData?.getData('text/html');if(h&&/<(table|h[1-6]|li)\b/i.test(h)){e.preventDefault();const m=htmlToMd(h);ta.setRangeText(m,ta.selectionStart,ta.selectionEnd,'end');preview()}});
+  ta.oninput=preview;
+  $('#mCancel').onclick=closeModal;
+  $('#mSave').onclick=()=>{const v=ta.value.trim();if(!v)return toast('Paste a plan first');
+    const p=parsePlan(v,wk.value),i=S.plans.findIndex(x=>x.week===p.week);
+    if(i>=0){if(!confirm(`Replace the existing plan for ${p.title}?`))return;
+      const old=S.plans[i];p.days.forEach((d,k)=>{if(old.days[k]&&old.days[k].day===d.day)d.done=old.days[k].done});p.review.forEach((r,k)=>{if(old.review[k]?.a&&!r.a)r.a=old.review[k].a});p.url||=old.url;S.plans[i]=p}
+    else S.plans.push(p);
+    planId=null;studyTab='week';save();closeModal();go('study');toast('Weekly plan saved')};
+}
+
+/* ----- LeetCode revision ----- */
+const lcRevised=()=>S.leetcode.filter(p=>p.last&&p.last>=S.lcRound).length;
+const lcSlug=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+const LCS=['Solved','Revisit','Mastered'];
+function studyLC(){
+  const L=S.leetcode,rev=lcRevised();
+  if(!L.length)return `<div class="card" style="max-width:600px"><h3>LeetCode</h3><div class="empty">No problems yet. Import your Notion data from Settings, or add one.</div></div>`;
+  const f={all:()=>true,todo:p=>!(p.last>=S.lcRound),revisit:p=>p.status==='Revisit',mistake:p=>p.mistake}[lcF];
+  const list=L.filter(f).sort((a,b)=>a.num-b.num);
+  const cnt=k=>L.filter(p=>p.difficulty===k).length;
+  return `<div class="g g4" style="margin-bottom:16px">
+    <div class="card stat"><div class="label">Revised this round</div><div class="v">${rev}<small> / ${L.length}</small></div><div class="meter"><i style="width:${rev/L.length*100}%"></i></div><div class="faint mono" style="font-size:11px;margin-top:8px">round started ${fmtDate(S.lcRound)}</div></div>
+    <div class="card stat"><div class="label">Solved</div><div class="v">${L.length}</div><div class="faint mono" style="font-size:11px;margin-top:6px"><span class="d-Easy">${cnt('Easy')} easy</span> · <span class="d-Medium">${cnt('Medium')} med</span> · <span class="d-Hard">${cnt('Hard')} hard</span></div></div>
+    <div class="card stat"><div class="label">Marked revisit</div><div class="v" style="color:var(--amber)">${L.filter(p=>p.status==='Revisit').length}</div></div>
+    <div class="card stat"><div class="label">Had a mistake</div><div class="v" style="color:var(--red)">${L.filter(p=>p.mistake).length}</div></div>
+  </div>
+  <div class="card"><h3><span class="seg">${[['all','All'],['todo','Not revised'],['revisit','Revisit'],['mistake','Mistakes']].map(([k,l])=>`<button class="${lcF===k?'on':''}" data-act="lcF" data-f="${k}">${l}</button>`).join('')}</span><span class="faint mono" style="text-transform:none;letter-spacing:0">${list.length} shown</span></h3>
+  <table class="lc"><tr><th></th><th>#</th><th>Problem</th><th>Pattern</th><th>Status</th><th>Practiced</th><th>Last revised</th><th></th></tr>
+  ${list.map(p=>{const r=p.last>=S.lcRound;return `<tr class="${p.mistake?'mis':''}"><td><button class="ck ${r?'on':''}" data-act="lcRev" data-id="${p.id}" title="${r?'Undo':'Mark revised today'}">✓</button></td>
+    <td class="mono muted">${p.num}</td>
+    <td><a href="https://leetcode.com/problems/${lcSlug(p.name)}/" target="_blank" rel="noopener" style="color:var(--text)">${esc(p.name)}</a> <span class="mono d-${esc(p.difficulty)}" style="font-size:11px">${esc(p.difficulty)}</span>${p.link?` <a href="${esc(p.link)}" target="_blank" rel="noopener" class="mono" style="font-size:11px">my solution ↗</a>`:''}<div class="ins">${esc(p.insight||'')}</div></td>
+    <td class="muted" style="font-size:13px">${esc(p.pattern||'')}</td>
+    <td><button class="pill clickable ${p.status==='Mastered'?'done':p.status==='Revisit'?'doing':''}" style="background:none" data-act="lcStat" data-id="${p.id}">${esc(p.status||'Solved')}</button></td>
+    <td class="mono">${p.count||0}×</td><td class="mono muted" style="font-size:12px">${p.last?fmtDate(p.last):'—'}</td>
+    <td><button class="btn sm ghost" data-act="lcEdit" data-id="${p.id}">✎</button></td></tr>`}).join('')}</table>
+  <div class="faint mono" style="font-size:11px;margin-top:10px">✓ = revised in this round (adds 1 to “practiced”). Click a status to cycle Solved → Revisit → Mastered.</div></div>`;
+}
+const lcF_=[{k:'num',label:'Problem number',type:'number'},{k:'name',label:'Name'},{k:'difficulty',label:'Difficulty',type:'select',opts:['Easy','Medium','Hard']},{k:'pattern',label:'Pattern',ph:'Two Pointer, Hashing…'},{k:'status',label:'Status',type:'select',opts:LCS},{k:'insight',label:'Key insight',type:'textarea'},{k:'link',label:'Solution link'}];
 
 /* ---------------- SKILLS ---------------- */
 function skills(){
@@ -585,36 +837,171 @@ async function syncGH(quiet){
   }catch(err){toast(err.message)}
 }
 
-/* ---------------- NOTES ---------------- */
-let noteId=null,noteMode='edit',noteFilter='all';
-function notes(){
-  const list=S.notes.filter(n=>noteFilter==='all'||n.type===noteFilter).sort((a,b)=>b.updated-a.updated);
-  if(!noteId||!S.notes.find(n=>n.id===noteId))noteId=list[0]?.id;
-  const n=S.notes.find(x=>x.id===noteId);
-  return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">Markdown. Autosaves.</div></div>
-  <div class="chips"><span class="seg">${['all','note','journal'].map(f=>`<button class="${noteFilter===f?'on':''}" data-act="nf" data-f="${f}">${f}</button>`).join('')}</span><button class="btn" data-act="newNote" data-t="journal">+ Journal entry</button><button class="btn pri" data-act="newNote" data-t="note">+ Note</button></div></div>
+/* ---------------- COURSE NOTES FROM GITHUB (live, read-only) ----------------
+   Reads the public course repos (Settings → note repos). File paths decide the
+   subject, topic and type, e.g. dsa/python/10_linked_list/quiz/lesson_3.md →
+   DSA · Linked List · quiz. The index is cached in localStorage (not synced). */
+const GHN='opuos.ghnotes';
+const NOTE_TYPES=[['lesson','Lesson'],['quiz','Quiz'],['practice','Practice'],['review','Review'],['reflection','Reflection'],['problem','Problems'],['rough','Rough'],['extra','Extra'],['note','Note']];
+const TYPE_ORD=Object.fromEntries(NOTE_TYPES.map(([k],i)=>[k,i]));
+const SUBJ={math:'Math',dsa:'DSA',cs50x:'CS50x',cs50p:'CS50P'};
+const SMALL=new Set(['and','of','the','to','in','vs','a','an','or','for','on']);
+const TYPE_DIRS={quiz:'quiz',quizzes:'quiz',rough:'rough',extra:'extra',problems:'problem',experiments:'extra'};
+const ghOwner=()=>S.settings.github||'ibrahim787898m';
+const pretty=s=>s.replace(/\.(md|txt)$/i,'').replace(/^\d+[_-]/,'').split(/[_-]+/).map((w,i)=>i&&SMALL.has(w.toLowerCase())?w.toLowerCase():w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
+function ghMeta(repo,path){
+  const parts=path.split('/'),file=parts.pop();
+  if(!/\.(md|txt)$/i.test(file)||/^(readme|license|changelog)\b/i.test(file))return null;
+  let type=null;const last=(parts.at(-1)||'').toLowerCase();
+  if(TYPE_DIRS[last]){type=TYPE_DIRS[last];parts.pop()}
+  const base=file.toLowerCase().replace(/\.(md|txt)$/,'');
+  type||=(/^(notes|lecture_notes|lesson_notes|concept_notes)$/.test(base)?'lesson':/practice/.test(base)?'practice':/reflection/.test(base)?'reflection':/review/.test(base)?'review':'note');
+  const title={notes:'Lesson notes',lecture_notes:'Lecture notes',concept_notes:'Concept notes',practice_questions:'Practice questions',reflection:'Reflection'}[base]||(type==='quiz'?'Quiz · '+pretty(base):pretty(file));
+  return {id:`gh:${repo}/${path}`,src:'github',repo,path,type,title,subject:SUBJ[repo.toLowerCase()]||pretty(repo),topic:parts.length?pretty(parts.at(-1)):'General',area:parts.slice(0,-1).map(pretty).join(' / '),tkey:parts.join('/'),
+    url:`https://github.com/${ghOwner()}/${repo}/blob/HEAD/${path.split('/').map(encodeURIComponent).join('/')}`};
+}
+let ghIdx=(()=>{try{return JSON.parse(localStorage.getItem(GHN))}catch(e){return null}})(),ghBusy=false,ghErr='',ghAllP=null;
+const ghBody={};
+async function loadGhNotes(force){
+  const repos=S.settings.noteRepos||[],sig=ghOwner()+'|'+repos.join(',');
+  if(ghBusy||(!force&&ghIdx?.sig===sig&&Date.now()-ghIdx.at<30*6e4))return;
+  ghBusy=true;ghErr='';if(view==='notes')render();
+  try{
+    const items=[];
+    for(const r of repos){
+      const res=await fetch(`https://api.github.com/repos/${ghOwner()}/${r}/git/trees/HEAD?recursive=1`,{cache:'no-store'});
+      if(!res.ok)throw new Error(res.status===404?`Repo “${r}” not found — is it public?`:res.status===403?'GitHub rate limit — try again in a while':'GitHub error '+res.status);
+      (await res.json()).tree.forEach(t=>{if(t.type!=='blob')return;const m=ghMeta(r,t.path);if(m){m.sha=t.sha;items.push(m)}});
+    }
+    ghIdx={sig,at:Date.now(),items};ghAllP=null;localStorage.setItem(GHN,JSON.stringify(ghIdx));
+  }catch(e){ghErr=e.message}
+  ghBusy=false;if(view==='notes')render();
+}
+async function ghText(n){
+  if(ghBody[n.sha]!=null)return ghBody[n.sha];
+  const r=await fetch(`https://raw.githubusercontent.com/${ghOwner()}/${n.repo}/HEAD/${n.path.split('/').map(encodeURIComponent).join('/')}?v=${n.sha}`);
+  if(!r.ok)throw new Error('Could not load this file ('+r.status+')');
+  return ghBody[n.sha]=await r.text();
+}
+const ghLoadAll=()=>ghAllP||=Promise.all((ghIdx?.items||[]).map(n=>ghText(n).catch(()=>''))).then(()=>{if(view==='notes')render()});
+
+/* ---------------- NOTES & JOURNAL ---------------- */
+let noteId=null,noteMode='edit',nView='notes',nSrc='all',nSubj='',nTopic='',nType='all',nQ='',nSort='topic',jId=null,jQ='';
+const isJ=n=>n.type==='journal';
+const MOODS=['😣','😕','😐','🙂','😄'];
+function allNotes(){return [...S.notes.filter(n=>!isJ(n)).map(n=>({...n,src:n.src||'local'})),...(ghIdx?.items||[])]}
+function tkeyMap(list){const m={};list.forEach(n=>{if(n.tkey)m[n.subject+'|'+n.topic]??=n.tkey});return m}
+const noteText=n=>n.src==='github'?(ghBody[n.sha]||''):(n.body||'');
+const qMatch=(n,q)=>!q||[n.title,n.subject,n.topic,n.area,(n.tags||[]).join(' '),noteText(n)].join(' ').toLowerCase().includes(q);
+function notes(){return nView==='journal'?journal():notesLib()}
+function notesLib(){
+  const all=allNotes(),km=tkeyMap(all),q=nQ.trim().toLowerCase();
+  const key=n=>n.tkey||km[n.subject+'|'+n.topic]||'~'+(n.topic||''); // own topics sort after repo topics
+  const base=all.filter(n=>(nSrc==='all'||(nSrc==='github')===(n.src==='github'))&&qMatch(n,q));
+  const subjects={};base.forEach(n=>{const s=n.subject||'Unsorted';(subjects[s]??={n:0,t:{}}).n++;const t=n.topic||'General';subjects[s].t[t]??={n:0,k:key(n)};subjects[s].t[t].n++});
+  const inScope=base.filter(n=>(!nSubj||(n.subject||'Unsorted')===nSubj)&&(!nTopic||(n.topic||'General')===nTopic));
+  const tc={};inScope.forEach(n=>tc[n.type]=(tc[n.type]||0)+1);
+  const list=inScope.filter(n=>nType==='all'||n.type===nType).sort(nSort==='recent'?(a,b)=>(b.updated||0)-(a.updated||0):(a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(a.subject||'~').localeCompare(b.subject||'~')||key(a).localeCompare(key(b),undefined,{numeric:true})||TYPE_ORD[a.type]-TYPE_ORD[b.type]||a.title.localeCompare(b.title,undefined,{numeric:true}));
+  if(!list.find(n=>n.id===noteId))noteId=list[0]?.id;
+  const n=list.find(x=>x.id===noteId);
+  const subjList=Object.keys(subjects).sort((a,b)=>a==='Unsorted'?1:b==='Unsorted'?-1:a.localeCompare(b));
+  const ghState=ghBusy?'<span class="pulse">syncing…</span>':ghErr?`<span style="color:var(--red)">${esc(ghErr)}</span>`:ghIdx?`${ghIdx.items.length} files · ${ago(new Date(ghIdx.at).toISOString())}`:'not loaded';
+  return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">Course notes live from GitHub, plus your own notes. <span class="mono faint" style="font-size:12px">GitHub: ${ghState}</span></div></div>
+  <div class="chips"><span class="seg"><button class="on">Notes</button><button data-act="nView" data-v="journal">Journal</button></span><button class="btn" data-act="ghNotes" title="Re-read your GitHub repos">↻ GitHub</button><button class="btn pri" data-act="newNote" data-t="note">+ Note</button></div></div>
   <div class="notes">
-    <div class="nlist">${list.map(x=>`<div class="nitem ${x.id===noteId?'on':''}" data-act="openNote" data-id="${x.id}"><div class="t">${esc(x.title||'Untitled')}</div><div class="faint mono" style="font-size:11px">${x.type} · ${ago(new Date(x.updated).toISOString())}</div></div>`).join('')||'<div class="empty">Nothing here yet.</div>'}</div>
-    ${n?`<div class="editor"><div style="display:flex;gap:10px;align-items:center"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1"><span class="seg"><button class="${noteMode==='edit'?'on':''}" data-act="nm" data-m="edit">Write</button><button class="${noteMode==='view'?'on':''}" data-act="nm" data-m="view">Preview</button></span><button class="btn sm danger ghost" data-act="delNote">Delete</button></div>
-    ${noteMode==='edit'?`<textarea id="nBody" placeholder="Start writing…">${esc(n.body)}</textarea>`:`<div class="prose">${md(n.body)}</div>`}</div>`:'<div class="empty">Create a note to get started.</div>'}
+    <div class="nside">
+      <input class="search" id="nQ" placeholder="Search notes…" value="${esc(nQ)}">
+      <span class="seg">${[['all','All'],['github','GitHub'],['local','Mine']].map(([k,l])=>`<button class="${nSrc===k?'on':''}" data-act="nSrc" data-v="${k}">${l}</button>`).join('')}</span>
+      <div class="tree"><button class="${!nSubj?'on':''}" data-act="nPick" data-s="" data-t=""><span>Everything</span><span>${base.length}</span></button>
+      ${subjList.map(s=>`<button class="${nSubj===s&&!nTopic?'on':''}" data-act="nPick" data-s="${esc(s)}" data-t=""><span><b>${esc(s)}</b></span><span>${subjects[s].n}</span></button>
+        ${nSubj===s?Object.entries(subjects[s].t).sort((a,b)=>a[1].k.localeCompare(b[1].k,undefined,{numeric:true})).map(([t,v])=>`<button class="sub ${nTopic===t?'on':''}" data-act="nPick" data-s="${esc(s)}" data-t="${esc(t)}"><span>${esc(t)}</span><span>${v.n}</span></button>`).join(''):''}`).join('')}</div>
+    </div>
+    <div>
+      <div class="tchips"><button class="tchip ${nType==='all'?'on':''}" data-act="nType" data-v="all">all<i>${inScope.length}</i></button>${NOTE_TYPES.filter(([k])=>tc[k]).map(([k,l])=>`<button class="tchip ${nType===k?'on':''}" data-act="nType" data-v="${k}">${l.toLowerCase()}<i>${tc[k]}</i></button>`).join('')}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="faint mono" style="font-size:11px">${list.length} note${list.length===1?'':'s'}${q&&ghIdx&&!ghAllP?' · searching titles…':''}</span><span class="seg">${[['topic','By topic'],['recent','Recent']].map(([k,l])=>`<button class="${nSort===k?'on':''}" style="padding:3px 9px;font-size:11px" data-act="nSort" data-v="${k}">${l}</button>`).join('')}</span></div>
+      <div class="nlist">${list.map(x=>`<div class="nitem ${x.id===noteId?'on':''}" data-act="openNote" data-id="${esc(x.id)}"><div class="t">${x.pinned?'📌 ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ty-${x.type}">${x.type}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc([x.subject,x.topic].filter(Boolean).join(' · ')||(x.updated?ago(new Date(x.updated).toISOString()):''))}</span>${x.src==='github'?'<span title="From GitHub" style="margin-left:auto">⌥</span>':x.url?'<span title="Imported from Notion" style="margin-left:auto">N</span>':''}</div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub notes…':'Nothing matches.'}</div>`}</div>
+    </div>
+    ${n?(n.src==='github'?ghViewer(n):noteEditor(S.notes.find(x=>x.id===n.id))):'<div class="empty">Pick a note, or create one.</div>'}
   </div>`;
 }
-after.notes=()=>{const t=$('#nTitle'),b=$('#nBody'),n=S.notes.find(x=>x.id===noteId);if(!n)return;
-  const up=()=>{n.title=t.value;if(b)n.body=b.value;n.updated=Date.now();save()};t&&(t.oninput=up);b&&(b.oninput=up)};
+function ghViewer(n){
+  return `<div class="editor"><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:0"><div class="label">${esc(n.subject)}${n.area?' · '+esc(n.area):''} · ${esc(n.topic)}</div><div style="font-size:24px;font-weight:700;letter-spacing:-.02em">${esc(n.title)}</div></div>
+    <span class="ty ty-${n.type}" style="margin-top:6px">${n.type}</span><a class="btn sm" href="${esc(n.url)}" target="_blank" rel="noopener">GitHub ↗</a></div>
+    <div class="faint mono" style="font-size:11px">${esc(n.repo)}/${esc(n.path)} · read-only — edit it in your repo and push</div>
+    <div class="prose" id="ghBody"><span class="faint pulse">Loading…</span></div></div>`;
+}
+function noteEditor(n){
+  const all=allNotes(),subs=[...new Set(all.map(x=>x.subject).filter(Boolean))].sort(),tops=[...new Set(all.filter(x=>!n.subject||x.subject===n.subject).map(x=>x.topic).filter(Boolean))].sort();
+  return `<div class="editor"><div style="display:flex;gap:10px;align-items:center"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1;min-width:0">
+    <span class="seg"><button class="${noteMode==='edit'?'on':''}" data-act="nm" data-m="edit">Write</button><button class="${noteMode==='view'?'on':''}" data-act="nm" data-m="view">Preview</button></span>
+    <button class="btn sm ghost" data-act="pinNote" title="Pin to top">${n.pinned?'📌':'📍'}</button><button class="btn sm danger ghost" data-act="delNote">Delete</button></div>
+    <div class="nmeta"><input id="nSubj" list="dlSubj" placeholder="Subject" value="${esc(n.subject)}" style="width:120px"><input id="nTop" list="dlTop" placeholder="Topic" value="${esc(n.topic)}" style="width:170px">
+      <select id="nTyp">${NOTE_TYPES.map(([k,l])=>`<option value="${k}" ${n.type===k?'selected':''}>${l}</option>`).join('')}</select>
+      <input id="nTags" placeholder="tags, comma separated" value="${esc((n.tags||[]).join(', '))}" style="flex:1;min-width:140px">
+      ${n.url?`<a class="btn sm" href="${esc(n.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}
+      <datalist id="dlSubj">${subs.map(s=>`<option value="${esc(s)}">`).join('')}</datalist><datalist id="dlTop">${tops.map(s=>`<option value="${esc(s)}">`).join('')}</datalist></div>
+    ${noteMode==='edit'?`<textarea id="nBody" placeholder="Start writing… (Markdown)">${esc(n.body)}</textarea>`:`<div class="prose">${md(n.body)}</div>`}</div>`;
+}
+function journal(){
+  const q=jQ.trim().toLowerCase();
+  const list=S.notes.filter(isJ).filter(n=>!q||(n.title+' '+n.body).toLowerCase().includes(q)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.updated||0)-(a.updated||0));
+  if(!list.find(n=>n.id===jId))jId=list[0]?.id;
+  const n=list.find(x=>x.id===jId);
+  const months={};list.forEach(x=>(months[(x.date||'').slice(0,7)]??=[]).push(x));
+  return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">${S.notes.filter(isJ).length} journal entries · private to you.</div></div>
+  <div class="chips"><span class="seg"><button data-act="nView" data-v="notes">Notes</button><button class="on">Journal</button></span><button class="btn" data-act="newJournal" data-k="review">+ Weekly review</button><button class="btn pri" data-act="newJournal" data-k="daily">+ Today</button></div></div>
+  <div class="notes j">
+    <div class="nside"><input class="search" id="jQ" placeholder="Search journal…" value="${esc(jQ)}">
+      ${Object.entries(months).map(([m,arr])=>`<div><div class="label" style="margin:4px 0 8px">${m?new Date(m+'-01T00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'}):'Undated'}</div><div class="nlist" style="max-height:none">${arr.map(x=>`<div class="nitem ${x.id===jId?'on':''}" data-act="openJ" data-id="${x.id}"><div class="t">${x.mood?MOODS[x.mood-1]+' ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ${x.kind==='review'?'ty-review':''}">${x.kind==='review'?'review':'daily'}</span><span>${x.date?fmtDate(x.date):''}</span></div></div>`).join('')}</div></div>`).join('')||'<div class="empty">No entries yet.</div>'}
+    </div>
+    ${n?`<div class="editor"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1;min-width:200px">
+      <span class="seg"><button class="${noteMode==='edit'?'on':''}" data-act="nm" data-m="edit">Write</button><button class="${noteMode==='view'?'on':''}" data-act="nm" data-m="view">Preview</button></span><button class="btn sm danger ghost" data-act="delJ">Delete</button></div>
+      <div class="nmeta"><input type="date" id="jDate" value="${esc(n.date||'')}"><span class="label" style="margin-left:6px">Mood</span><span class="mood">${MOODS.map((m,i)=>`<button class="${n.mood===i+1?'on':''}" data-act="jMood" data-v="${i+1}">${m}</button>`).join('')}</span></div>
+      ${noteMode==='edit'?`<textarea id="nBody" placeholder="Start writing…">${esc(n.body)}</textarea>`:`<div class="prose">${md(n.body)}</div>`}</div>`:'<div class="empty">Write today\'s entry to get started.</div>'}
+  </div>`;
+}
+after.notes=()=>{
+  const keepFocus=(id,fn)=>{const el=$('#'+id);if(!el)return;el.oninput=()=>{fn(el.value);render();const e=$('#'+id);e.focus();e.setSelectionRange(e.value.length,e.value.length)}};
+  keepFocus('nQ',v=>{nQ=v;if(v.trim())ghLoadAll()});keepFocus('jQ',v=>jQ=v);
+  if(nView==='journal'){const n=S.notes.find(x=>x.id===jId);if(!n)return;const t=$('#nTitle'),b=$('#nBody'),d=$('#jDate');
+    const up=()=>{n.title=t.value;if(b)n.body=b.value;n.updated=Date.now();save()};t.oninput=up;if(b)b.oninput=up;d.onchange=()=>{n.date=d.value;save();render()};return}
+  const g=ghIdx?.items.find(x=>x.id===noteId);
+  if(g){ghText(g).then(t=>{const el=$('#ghBody');if(el&&noteId===g.id)el.innerHTML=/\.txt$/i.test(g.path)?`<pre class="txt">${esc(t)}</pre>`:md(t)}).catch(e=>{const el=$('#ghBody');if(el)el.innerHTML=`<span style="color:var(--red)">${esc(e.message)}</span>`});return}
+  const n=S.notes.find(x=>x.id===noteId);if(!n)return;
+  const t=$('#nTitle'),b=$('#nBody'),up=()=>{n.title=t.value;if(b)n.body=b.value;n.updated=Date.now();save()};t.oninput=up;if(b)b.oninput=up;
+  $('#nSubj').onchange=e=>{n.subject=e.target.value.trim();save();render()};$('#nTop').onchange=e=>{n.topic=e.target.value.trim();save();render()};
+  $('#nTyp').onchange=e=>{n.type=e.target.value;save();render()};$('#nTags').onchange=e=>{n.tags=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);save()};
+};
+
+/* ---------------- Markdown → HTML (escaped first, so note text can't inject HTML) ---------------- */
+function inl(x){
+  const cs=[];x=x.replace(/`([^`]+)`/g,(_,c)=>{cs.push(c);return `\u0001${cs.length-1}\u0001`});
+  x=x.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/(^|[^\w*\\])\*(?![\s*])([^*\n]*?[^\s*\\])\*(?!\w)/g,'$1<em>$2</em>')
+     .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/\\([*_`\[\]#<>|-])/g,'$1');
+  return x.replace(/\u0001(\d+)\u0001/g,(_,i)=>`<code>${cs[i]}</code>`);
+}
 function md(s){
-  const blocks=[];s=esc(s).replace(/```([\s\S]*?)```/g,(_,c)=>{blocks.push(c.replace(/^\n/,''));return `\u0000${blocks.length-1}\u0000`});
-  let html='',inList=false;
-  for(let line of s.split('\n')){
-    const il=x=>x.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/\[(.+?)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
-    if(/^[-*] /.test(line)){if(!inList){html+='<ul>';inList=true}html+=`<li>${il(line.slice(2))}</li>`;continue}
-    if(inList){html+='</ul>';inList=false}
-    const h=line.match(/^(#{1,3}) (.*)/);
-    if(h)html+=`<h${h[1].length}>${il(h[2])}</h${h[1].length}>`;
-    else if(/^\u0000\d+\u0000$/.test(line.trim()))html+=line.trim();
-    else html+=line.trim()?`<p>${il(line)}</p>`:'';
+  const blocks=[];s=esc(s||'').replace(/\r/g,'').replace(/```[^\n]*\n?([\s\S]*?)```/g,(_,c)=>{blocks.push(c.replace(/\n$/,''));return `\n\u0000${blocks.length-1}\u0000\n`});
+  const L=s.split('\n');let h='',list=null;
+  const close=()=>{if(list){h+=`</${list.split(' ')[0]}>`;list=null}};
+  const open=tag=>{if(list!==tag){close();h+=`<${tag}>`;list=tag}};
+  const row=r=>r.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+  for(let i=0;i<L.length;i++){
+    const t=L[i].trim();let m;
+    if(/^\u0000\d+\u0000$/.test(t)){close();h+=t;continue}
+    if(t.startsWith('|')&&L[i+1]&&/^\s*\|?\s*:?-{2,}/.test(L[i+1])){close();const hd=row(t);i++;let body='';while(L[i+1]?.trim().startsWith('|')){i++;body+=`<tr>${row(L[i]).map(c=>`<td>${inl(c)}</td>`).join('')}</tr>`}h+=`<table><tr>${hd.map(c=>`<th>${inl(c)}</th>`).join('')}</tr>${body}</table>`;continue}
+    if(m=t.match(/^[-*+] \[( |x|X)\] (.*)/)){open('ul class="tasks"');h+=`<li><input type="checkbox" disabled ${m[1]!==' '?'checked':''}>${inl(m[2])}</li>`;continue}
+    if(m=t.match(/^[-*+] (.*)/)){open('ul');h+=`<li>${inl(m[1])}</li>`;continue}
+    if(m=t.match(/^(\d+)[.)] (.*)/)){open('ol');h+=`<li value="${m[1]}">${inl(m[2])}</li>`;continue}
+    if(!t&&list&&/^\s*([-*+]|\d+[.)]) /.test(L[i+1]||''))continue;
+    close();
+    if(m=t.match(/^(#{1,4}) (.*)/)){h+=`<h${m[1].length}>${inl(m[2])}</h${m[1].length}>`;continue}
+    if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){h+='<hr>';continue}
+    if(t.startsWith('&gt;')){const q=[t.replace(/^&gt;\s?/,'')];while(L[i+1]?.trim().startsWith('&gt;')){i++;q.push(L[i].trim().replace(/^&gt;\s?/,''))}h+=`<blockquote>${q.map(inl).join('<br>')}</blockquote>`;continue}
+    if(t)h+=`<p>${inl(t)}</p>`;
   }
-  if(inList)html+='</ul>';
-  return html.replace(/\u0000(\d+)\u0000/g,(_,i)=>`<pre><code>${blocks[i]}</code></pre>`);
+  close();
+  return h.replace(/\u0000(\d+)\u0000/g,(_,i)=>`<pre><code>${blocks[i]}</code></pre>`);
 }
 
 /* ---------------- PRESENCE ---------------- */
@@ -647,6 +1034,7 @@ function settings(){
       <div class="field"><span class="label">GitHub username</span><input id="sGh" value="${esc(s.github)}" placeholder="your-username"></div>
       <div class="field"><span class="label">Website</span><input id="sSite" value="${esc(s.site)}"></div>
       <div class="field"><span class="label">Weekly study goal (hours)</span><input id="sGoal" type="number" min="1" value="${s.weeklyGoal}"></div>
+      <div class="field"><span class="label">Course note repos (public, comma-separated)</span><input id="sRepos" value="${esc((s.noteRepos||[]).join(', '))}" placeholder="math, dsa, cs50x"><span class="faint" style="font-size:12px">Read live from github.com/${esc(ghOwner())}/… — shown in Notes.</span></div>
       <button class="btn pri" data-act="saveSettings">Save</button></div>
     <div class="g" style="align-content:start">
       <div class="card"><h3>Cloud sync <span class="mono" style="text-transform:none;letter-spacing:0;color:${syncCfg()?.gistId?'var(--acc)':'var(--faint)'}">${syncCfg()?.gistId?'● connected':'○ off'}</span></h3>
@@ -656,7 +1044,8 @@ function settings(){
       :`<ol class="steps"><li><a href="https://github.com/settings/tokens/new?scopes=gist&description=OPU%2FOS%20sync" target="_blank" rel="noopener">Create a GitHub token ↗</a> with <b>only</b> the <code>gist</code> scope</li><li>Paste it below and connect</li></ol>
         <div class="field"><input id="sTok" type="password" placeholder="ghp_…" autocomplete="off"></div><button class="btn pri" data-act="syncOn">Connect sync</button>
         <div class="faint mono" id="syncDetail" style="font-size:12px;margin-top:10px"></div>`}</div>
-      <div class="card"><h3>Data</h3><div class="chips"><button class="btn" data-act="export">⇩ Export JSON</button><button class="btn" data-act="import">⇧ Import JSON</button><button class="btn danger" data-act="reset">Reset everything</button></div><input type="file" id="impFile" accept=".json" style="display:none"></div>
+      <div class="card"><h3>Data</h3><div class="chips"><button class="btn" data-act="export">⇩ Export JSON</button><button class="btn" data-act="import">⇧ Import JSON</button><button class="btn danger" data-act="reset">Reset everything</button></div><input type="file" id="impFile" accept=".json" style="display:none">
+        <div class="faint" style="font-size:12px;margin-top:10px">Import accepts a full backup (replaces everything) or a Notion import file (merges: roadmap, weekly plans, notes, LeetCode).</div></div>
       <div class="card"><h3>Security</h3><div class="field"><span class="label">New passphrase</span><input id="sPw" type="password"></div><button class="btn" data-act="changePw">Change passphrase</button>
       <div class="faint" style="font-size:12px;margin-top:10px">The lock is client-side — it keeps casual visitors out, not a determined attacker. Don't store secrets here.</div></div>
     </div>
@@ -678,7 +1067,25 @@ const sessF=()=>[{k:'date',label:'Date',type:'date'},{k:'topic',label:'What did 
 const jobF=[{k:'company',label:'Company'},{k:'role',label:'Role'},{k:'status',label:'Stage',type:'select',opts:JS},{k:'date',label:'Applied on',type:'date'},{k:'followUp',label:'Follow up on',type:'date'},{k:'link',label:'Posting URL'},{k:'notes',label:'Notes',type:'textarea'}];
 const skillF=[{k:'name',label:'Skill'},{k:'cat',label:'Category',ph:'Languages, Web, Tools…'},{k:'level',label:'Level (1–5)',type:'select',opts:[[1,'1 · Beginner'],[2,'2 · Learning'],[3,'3 · Comfortable'],[4,'4 · Strong'],[5,'5 · Expert']]},{k:'notes',label:'Evidence / notes'}];
 const projF=[{k:'name',label:'Name'},{k:'status',label:'Status',type:'select',opts:['Planning','Active','Paused','Shipped']},{k:'desc',label:'Description',type:'textarea'},{k:'next',label:'Next action'},{k:'link',label:'Link'}];
+const stepF=[{k:'track',label:'Track (existing or new)'},{k:'step',label:'Step number (optional)',type:'number'},{k:'title',label:'Title'},{k:'status',label:'Status',type:'select',opts:['todo','doing','done']},{k:'notes',label:'Notes'},{k:'url',label:'Link (optional)'}];
+const normStep=o=>({...o,step:o.step===''||o.step==null||isNaN(o.step)||o.step===0?null:+o.step});
 const find=(arr,id)=>S[arr].find(x=>x.id===id);
+/* Merge an import file (made from Notion) into the current data. Re-importing updates, never duplicates. */
+function mergeImport(d){
+  const c={road:0,plans:0,notes:0,lc:0};
+  if(d.roadmap?.length){
+    const tracks=new Set(d.roadmap.map(r=>r.track)),old=S.roadmap.filter(r=>!r.nid&&tracks.has(r.track));
+    if(old.length&&confirm(`Your Notion roadmap has a ${[...new Set(old.map(o=>o.track))].join(', ')} track. Remove the ${old.length} starter item(s) already in it so they don't mix?`))S.roadmap=S.roadmap.filter(r=>!old.includes(r));
+    d.roadmap.forEach(r=>{const e=S.roadmap.find(x=>x.nid===r.nid);if(e)Object.assign(e,r);else S.roadmap.push({id:uid(),...r});c.road++});
+  }
+  (d.roadmapPatch||[]).forEach(p=>{const e=S.roadmap.find(x=>x.track===p.track&&x.title===p.title);if(e)Object.assign(e,p.set)});
+  (d.notes||[]).forEach(n=>{const e=S.notes.find(x=>x.nid&&x.nid===n.nid);if(e)Object.assign(e,n);else S.notes.push({id:uid(),tags:[],subject:'',topic:'',updated:Date.now(),...n});c.notes++});
+  (d.plans||[]).forEach(r=>{const p=parsePlan(r.md,r.week);Object.assign(p,{nid:r.nid,url:r.url});if(r.title)p.title=r.title;
+    const i=S.plans.findIndex(x=>x.week===p.week);if(i>=0){const o=S.plans[i];p.id=o.id;p.days.forEach((x,k)=>{if(o.days[k]?.day===x.day)x.done=o.days[k].done});p.outcomes.forEach((x,k)=>{if(o.outcomes[k])x.done=o.outcomes[k].done});S.plans[i]=p}else S.plans.push(p);c.plans++});
+  (d.leetcode||[]).forEach(p=>{const e=S.leetcode.find(x=>x.num===p.num);if(e)Object.assign(e,p,{last:e.last,prev:e.prev,count:Math.max(e.count||0,p.count||0)});else S.leetcode.push({id:uid(),last:'',...p});c.lc++});
+  if(d.lcRound&&!S.leetcode.some(p=>p.last))S.lcRound=d.lcRound;
+  planId=null;save();render();toast(`Imported: ${c.road} roadmap · ${c.plans} plans · ${c.notes} notes · ${c.lc} problems`);
+}
 const del=(arr,id)=>()=>S[arr]=S[arr].filter(x=>x.id!==id);
 
 /* ---------------- actions ---------------- */
@@ -686,9 +1093,9 @@ const A={
   go:d=>go(d.v), palette:openPal, lock,
   track:d=>{studyTrack=d.t;render()},
   cycle:d=>{const r=find('roadmap',d.id);r.status={todo:'doing',doing:'done',done:'todo'}[r.status];save();render()},
-  addStep:()=>form('Roadmap item',[{k:'track',label:'Track (existing or new)'},{k:'title',label:'Title'},{k:'status',label:'Status',type:'select',opts:['todo','doing','done']}],{track:studyTrack,status:'todo'},o=>{S.roadmap.push({id:uid(),...o});studyTrack=o.track}),
-  editStep:d=>{const r=find('roadmap',d.id);form('Edit item',[{k:'track',label:'Track'},{k:'title',label:'Title'},{k:'status',label:'Status',type:'select',opts:['todo','doing','done']}],r,o=>Object.assign(r,o),del('roadmap',d.id))},
-  logSession:(d,pre={})=>form('Log study session',sessF(),{date:today(),minutes:60,problems:0,track:studyTrack,...pre},o=>{S.sessions.push({id:uid(),...o});toast(`Logged ${hm(o.minutes)} 🔥`)}),
+  addStep:()=>form('Roadmap item',stepF,{track:studyTrack||'',status:'todo'},o=>{S.roadmap.push({id:uid(),...normStep(o)});studyTrack=o.track}),
+  editStep:d=>{const r=find('roadmap',d.id);form('Edit item',stepF,r,o=>Object.assign(r,normStep(o)),del('roadmap',d.id))},
+  logSession:(d,pre={})=>form('Log study session',sessF(),{date:today(),minutes:60,problems:0,track:studyTrack||'',...pre},o=>{S.sessions.push({id:uid(),...o});toast(`Logged ${hm(o.minutes)} 🔥`)}),
   editSession:d=>{const s=find('sessions',d.id);form('Edit session',sessF(),s,o=>Object.assign(s,o),del('sessions',d.id))},
   addSkill:()=>form('New skill',skillF,{level:1},o=>S.skills.push({id:uid(),...o,level:+o.level})),
   editSkill:d=>{const s=find('skills',d.id);form('Edit skill',skillF,s,o=>Object.assign(s,o,{level:+o.level}),del('skills',d.id))},
@@ -702,18 +1109,54 @@ const A={
   recheck:checkSite,
   ghSet:()=>{const u=$('#ghU').value.trim();if(!u)return;S.settings.github=u;S.gh=null;save();render();syncGH()},
   ghSync:()=>{toast('Syncing…');syncGH()},
-  nf:d=>{noteFilter=d.f;noteId=null;render()},
+  /* study */
+  studyTab:d=>{studyTab=d.t;planId=null;go('study')},
+  pastePlan:pastePlanModal,
+  openPlan:d=>{planId=d.id;render()},
+  delPlan:d=>{if(confirm('Delete this weekly plan?')){S.plans=S.plans.filter(p=>p.id!==d.id);planId=null;save();render()}},
+  pDay:d=>{const p=S.plans.find(x=>x.id===d.p),x=p.days[+d.i];x.done=!x.done;save();render();if(x.done&&p.days.every(y=>y.done))toast('Whole week done 🎉')},
+  pOut:d=>{const o=S.plans.find(x=>x.id===d.p).outcomes[+d.i];o.done=!o.done;save();render()},
+  reviewToJournal:d=>{const p=S.plans.find(x=>x.id===d.id);const n={id:uid(),type:'journal',kind:'review',date:today(),title:'Weekly review — '+p.title,body:p.review.map(r=>`## ${r.q}\n\n${r.a}\n`).join('\n'),tags:[],subject:'',topic:'',updated:Date.now()};S.notes.push(n);jId=n.id;nView='journal';noteMode='view';save();go('notes');toast('Saved to journal')},
+  lcF:d=>{lcF=d.f;render()},
+  lcRev:d=>{const p=find('leetcode',d.id);if(p.last>=S.lcRound){p.count=Math.max(0,(p.count||1)-1);p.last=p.prev||'';delete p.prev}else{p.prev=p.last||'';p.last=today();p.count=(p.count||0)+1}save();render()},
+  lcStat:d=>{const p=find('leetcode',d.id);p.status=LCS[(LCS.indexOf(p.status)+1)%LCS.length];save();render()},
+  lcAdd:()=>form('Add LeetCode problem',lcF_,{difficulty:'Easy',status:'Solved'},o=>S.leetcode.push({id:uid(),...o,num:+o.num,count:1,last:today(),mistake:false})),
+  lcEdit:d=>{const p=find('leetcode',d.id);form('Edit problem',[...lcF_,{k:'mistake',label:'Made a mistake?',type:'select',opts:[['false','No'],['true','Yes']]}],p,o=>Object.assign(p,o,{num:+o.num,mistake:o.mistake==='true'}),del('leetcode',d.id))},
+  lcRound:()=>{if(confirm(`Start a new revision round? The ✓ marks reset (practice counts are kept). Last round: ${lcRevised()}/${S.leetcode.length} revised.`)){S.lcRound=today();save();render()}},
+  /* notes */
+  nView:d=>{nView=d.v;noteMode=d.v==='journal'?'edit':noteMode;render()},
+  nSrc:d=>{nSrc=d.v;render()},
+  nPick:d=>{nSubj=d.s;nTopic=d.t;nType='all';render()},
+  nType:d=>{nType=d.v;render()},
+  nSort:d=>{nSort=d.v;render()},
   nm:d=>{noteMode=d.m;render()},
   openNote:d=>{noteId=d.id;render()},
-  newNote:d=>{const j=d.t==='journal';const n={id:uid(),type:d.t,title:j?new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):'',body:j?'## What I did today\n\n\n## What I learned\n\n\n## What blocked me\n\n\n## Tomorrow\n':'',updated:Date.now()};S.notes.push(n);noteId=n.id;noteMode='edit';save();go('notes');setTimeout(()=>(j?$('#nBody'):$('#nTitle'))?.focus(),20)},
+  ghNotes:()=>{toast('Reading your GitHub repos…');loadGhNotes(true)},
+  newNote:d=>{const n={id:uid(),type:'note',title:'',body:'',tags:[],subject:nSubj&&nSubj!=='Unsorted'?nSubj:'',topic:nTopic&&nTopic!=='General'?nTopic:'',updated:Date.now()};S.notes.push(n);noteId=n.id;nView='notes';nSrc='all';nType='all';nQ='';noteMode='edit';save();go('notes');setTimeout(()=>$('#nTitle')?.focus(),20)},
+  pinNote:()=>{const n=S.notes.find(x=>x.id===noteId);n.pinned=!n.pinned;save();render()},
   delNote:()=>{if(confirm('Delete this note?')){S.notes=S.notes.filter(n=>n.id!==noteId);noteId=null;save();render()}},
-  saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github;Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite()},
+  newJournal:d=>{
+    if(d.k==='daily'){const e=S.notes.find(n=>isJ(n)&&n.kind!=='review'&&n.date===today());if(e){jId=e.id;nView='journal';noteMode='edit';go('notes');return}}
+    const rv=d.k==='review',p=curPlan();
+    const n={id:uid(),type:'journal',kind:rv?'review':'daily',date:today(),tags:[],subject:'',topic:'',updated:Date.now(),
+      title:rv?'Weekly review — week of '+fmtLong(weekStart()):new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}),
+      body:rv?`## Wins this week\n\n\n## What didn't go to plan\n\n\n## Topics that need relearning\n\n\n## Numbers\n\n- Study time: ${hm(weekMinutes())}\n- Plan days done: ${p?p.days.filter(x=>x.done).length+'/'+p.days.length:'—'}\n- LeetCode revised this round: ${lcRevised()}/${S.leetcode.length}\n\n## Next week's focus\n`
+        :'## What I did today\n\n\n## What I learned\n\n\n## What blocked me\n\n\n## Tomorrow\n'};
+    S.notes.push(n);jId=n.id;nView='journal';noteMode='edit';save();go('notes');setTimeout(()=>$('#nBody')?.focus(),20)},
+  openJ:d=>{jId=d.id;render()},
+  jMood:d=>{const n=S.notes.find(x=>x.id===jId);n.mood=n.mood===+d.v?0:+d.v;save();render()},
+  delJ:()=>{if(confirm('Delete this journal entry?')){S.notes=S.notes.filter(n=>n.id!==jId);jId=null;save();render()}},
+  saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github,repos=$('#sRepos').value.split(',').map(x=>x.trim()).filter(Boolean);Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20,noteRepos:repos});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite();loadGhNotes(true)},
   changePw:async()=>{const v=$('#sPw').value;if(v.length<4)return toast('Min 4 characters');localStorage.setItem(HKEY,await hash(v));$('#sPw').value='';save();toast('Passphrase changed')},
   syncOn:()=>{const t=$('#sTok').value.trim();if(t)connectSync(t)},
   syncNow:async()=>{await pullGist();if(syncSt.s!=='err')await pushGist();toast(syncSt.s==='err'?syncSt.msg:'Synced')},
   syncOff:()=>{if(confirm('Disconnect cloud sync on this browser? (Your Gist is kept.)')){localStorage.removeItem(SYNC);setSync('off');render()}},
   export:()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download=`opuos-backup-${today()}.json`;a.click()},
-  import:()=>{const f=$('#impFile');f.onchange=()=>{const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.settings)throw 0;S=d;save();toast('Imported');render()}catch(e){toast('Invalid file')}};r.readAsText(f.files[0])};f.click()},
+  import:()=>{const f=$('#impFile');f.onchange=()=>{const r=new FileReader();r.onload=()=>{let d;try{d=JSON.parse(r.result)}catch(e){return toast('Invalid file')}
+      if(d.opuosImport)return mergeImport(d);
+      if(!d.settings)return toast('Invalid file');
+      if(!confirm('This is a full backup — it will REPLACE all current data. Continue?'))return;
+      S=d;migrate();save();toast('Imported');render()};r.readAsText(f.files[0]);f.value=''};f.click()},
   reset:()=>{if(confirm('Wipe ALL data and start fresh?')){localStorage.removeItem(KEY);load();render();toast('Reset')}},
   timerStart:d=>startTimer(+d.m), timerStop:stopTimer, timerLog:()=>finishTimer(true),
 };
@@ -743,9 +1186,13 @@ function cmds(){
     ...[['dash','Dashboard'],['study','Study'],['skills','Skills'],['projects','Projects'],['career','Career'],['github','GitHub'],['notes','Notes & Journal'],['links','Presence'],['settings','Settings']].map(([v,l])=>({l:'Go to '+l,k:'nav',f:()=>go(v)})),
     {l:'Start focus · 25 min',k:'timer',f:()=>startTimer(25)},{l:'Start focus · 50 min',k:'timer',f:()=>startTimer(50)},
     {l:'Log study session',k:'study',f:()=>A.logSession({})},{l:'New application',k:'career',f:A.addJob},
-    {l:'New note',k:'notes',f:()=>A.newNote({t:'note'})},{l:"Today's journal entry",k:'notes',f:()=>A.newNote({t:'journal'})},
-    {l:'Sync GitHub',k:'github',f:()=>syncGH()},{l:'Export backup',k:'data',f:A.export},{l:'Lock',k:'system',f:lock},
-    ...S.notes.map(n=>({l:n.title||'Untitled',k:n.type,f:()=>{noteId=n.id;go('notes')}})),
+    {l:'New note',k:'notes',f:()=>A.newNote({})},{l:"Today's journal entry",k:'journal',f:()=>A.newJournal({k:'daily'})},
+    {l:'Sync GitHub',k:'github',f:()=>syncGH()},
+    {l:"This week's plan",k:'study',f:()=>A.studyTab({t:'week'})},{l:'Add weekly plan',k:'study',f:pastePlanModal},{l:'LeetCode revision',k:'study',f:()=>A.studyTab({t:'leetcode'})},{l:'Roadmap',k:'study',f:()=>A.studyTab({t:'roadmap'})},
+    {l:'Weekly review entry',k:'journal',f:()=>A.newJournal({k:'review'})},{l:'Refresh GitHub notes',k:'notes',f:()=>loadGhNotes(true)},{l:'Export backup',k:'data',f:A.export},{l:'Lock',k:'system',f:lock},
+    ...S.notes.map(n=>({l:n.title||'Untitled',k:n.type,f:()=>{if(isJ(n)){jId=n.id;nView='journal'}else{noteId=n.id;nView='notes';nSubj=nTopic=nQ='';nType=nSrc='all'}go('notes')}})),
+    ...(ghIdx?.items||[]).map(n=>({l:`${n.subject} · ${n.topic} — ${n.title}`,k:n.type,f:()=>{noteId=n.id;nView='notes';nSubj=n.subject;nTopic=n.topic;nType='all';nSrc='all';nQ='';go('notes')}})),
+    ...S.roadmap.filter(r=>r.step!=null).map(r=>({l:`Step ${r.step} · ${r.title}`,k:'roadmap',f:()=>{studyTrack=r.track;A.studyTab({t:'roadmap'})}})),
     ...S.jobs.map(j=>({l:`${j.company} — ${j.role}`,k:'job',f:()=>A.editJob({id:j.id})})),
     ...S.projects.map(p=>({l:p.name,k:'project',f:()=>A.editProject({id:p.id})})),
   ];
