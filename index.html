@@ -321,7 +321,6 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <p id="lockMsg">Enter your passphrase.</p>
     <form id="lockForm">
       <input id="lockInput" type="password" placeholder="passphrase" autocomplete="current-password" autofocus>
-      <input id="lockInput2" type="password" placeholder="confirm passphrase" style="margin-top:10px;display:none" autocomplete="new-password">
       <div class="err" id="lockErr"></div>
       <button class="btn pri" style="width:100%;padding:12px;margin-top:6px" id="lockBtn">Unlock →</button>
     </form>
@@ -412,11 +411,7 @@ function seed(){
       {id:uid(),name:'CodeKen',status:'Active',desc:'Coding education website.',link:'',next:''},
       {id:uid(),name:'OPU/OS',status:'Shipped',desc:'This command center.',link:'',next:''},
     ],
-    jobs:[
-      {id:uid(),company:'DataAnnotation',role:'AI Annotation (Remote)',status:'applied',date:'',followUp:'',link:'',notes:'Assessment submitted, waiting to hear back.'},
-      {id:uid(),company:'Red Lobster',role:'Line Cook',status:'interview',date:'',followUp:'',link:'',notes:'STAR answers prepared.'},
-      {id:uid(),company:'Security roles (Toronto)',role:'Security Guard',status:'wishlist',date:'',followUp:'',link:'',notes:'Ontario Security Guard Licence in progress.'},
-    ],
+    jobs:[],
     notes:[{id:uid(),type:'note',title:'Welcome to OPU/OS',body:'# Command center\n\nEverything in one place.\n\n- **Ctrl+K** opens the command palette\n- Keys **1–9** jump between sections\n- The focus timer logs study sessions automatically\n\n```\nprint("hello, world")\n```',updated:Date.now()}],
     links:[
       {id:uid(),label:'Portfolio',url:'https://ibrahimmustafaopu.com'},
@@ -501,22 +496,28 @@ window.addEventListener('beforeunload',e=>{if(pushT){pushGist();e.preventDefault
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),1800)}
 
 /* ---------------- lock ---------------- */
-async function hash(s){
-  if(window.crypto?.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('opuos::'+s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-  let h=5381;for(const c of 'opuos::'+s)h=((h<<5)+h+c.charCodeAt(0))|0;return 'f'+h;
+/* Owner-only lock. The code holds only a slow, salted PBKDF2 hash of the owner's passphrase —
+   never the passphrase. Set or change it with tools/set_owner.py, then push. Visitors can't
+   create their own passphrase. (The code is public, so this keeps people out of the UI; the
+   real data lives in the owner's browser and private Gist, never in this file.) */
+const OWNER={salt:'1e443741ba2ae0d0d10bfee4277a61c2',iter:600000,hash:'e524a1244be5180283e2323af8e82313c19895f8926598d889135c14e99885a4'};
+const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+async function ownerHash(pw){
+  const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);
+  const salt=new Uint8Array(OWNER.salt.match(/../g).map(h=>parseInt(h,16)));
+  return hex(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:OWNER.iter},k,256));
 }
 function initLock(){
-  const has=!!localStorage.getItem(HKEY);
-  if(!has){$('#lockMsg').textContent='First run — create a passphrase to protect your command center.';$('#lockInput2').style.display='block';$('#lockBtn').textContent='Create & enter →'}
+  const ready=/^[0-9a-f]{64}$/.test(OWNER.hash);
+  if(!ready){$('#lockMsg').textContent='Not set up yet: run tools/set_owner.py to add the owner passphrase.';$('#lockForm').style.display='none'}
   $('#lockForm').onsubmit=async e=>{
-    e.preventDefault();const v=$('#lockInput').value;
-    if(!has){
-      if(v.length<4)return $('#lockErr').textContent='Use at least 4 characters.';
-      if(v!==$('#lockInput2').value)return $('#lockErr').textContent='Passphrases do not match.';
-      localStorage.setItem(HKEY,await hash(v));
-    }else if(await hash(v)!==localStorage.getItem(HKEY)){
-      $('#lockErr').textContent='ACCESS DENIED';$('#lockInput').value='';return;
-    }
+    e.preventDefault();const v=$('#lockInput').value,btn=$('#lockBtn');if(!v)return;
+    btn.disabled=true;btn.textContent='Checking…';$('#lockErr').textContent='';
+    let ok=false,err='';
+    try{if(!window.crypto?.subtle)throw new Error('This browser blocks secure crypto here: open the https:// site.');ok=await ownerHash(v)===OWNER.hash}catch(x){err=x.message||String(x)}
+    btn.disabled=false;btn.textContent='Unlock →';
+    if(err){$('#lockErr').textContent=err;return}
+    if(!ok){$('#lockErr').textContent='ACCESS DENIED';$('#lockInput').value='';return}
     sessionStorage.setItem(SKEY,'1');enter();
   };
   $('#restoreToggle').onclick=()=>{const f=$('#restoreForm');f.style.display=f.style.display==='none'?'block':'none';$('#restoreToken').focus()};
@@ -527,11 +528,11 @@ function initLock(){
       const id=await findGist(token);
       if(!id)throw new Error('No OPU/OS data found on this GitHub account. Connect sync in Settings on your other browser first.');
       const r=await readGist(id,token);
-      localStorage.setItem(KEY,JSON.stringify(r.data));if(r.hash)localStorage.setItem(HKEY,r.hash);
+      localStorage.setItem(KEY,JSON.stringify(r.data));
       localStorage.setItem(SYNC,JSON.stringify({token,gistId:id}));location.reload();
     }catch(err){$('#restoreErr').textContent=err.message;$('#restoreBtn').textContent='Restore my data →'}
   };
-  if(has&&sessionStorage.getItem(SKEY))enter();
+  if(ready&&sessionStorage.getItem(SKEY))enter();
 }
 function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');pullGist();go(location.hash.slice(1)||'dash');renderTimer();checkSite();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)}
 function lock(){sessionStorage.removeItem(SKEY);location.reload()}
@@ -1232,8 +1233,8 @@ function settings(){
         <div class="faint mono" id="syncDetail" style="font-size:12px;margin-top:10px"></div>`}</div>
       <div class="card"><h3>Data</h3><div class="chips"><button class="btn" data-act="export">⇩ Export JSON</button><button class="btn" data-act="import">⇧ Import JSON</button><button class="btn danger" data-act="reset">Reset everything</button></div><input type="file" id="impFile" accept=".json" style="display:none">
         <div class="faint" style="font-size:12px;margin-top:10px">Import accepts a full backup (replaces everything) or a Notion import file (merges: roadmap, weekly plans, notes, LeetCode).</div></div>
-      <div class="card"><h3>Security</h3><div class="field"><span class="label">New passphrase</span><input id="sPw" type="password"></div><button class="btn" data-act="changePw">Change passphrase</button>
-      <div class="faint" style="font-size:12px;margin-top:10px">The lock is client-side — it keeps casual visitors out, not a determined attacker. Don't store secrets here.</div></div>
+      <div class="card"><h3>Security</h3><div class="muted" style="font-size:14px">Owner-only lock: only your passphrase opens this app, in any browser. To change it, run <code>python3 tools/set_owner.py</code> in the repo and push.</div>
+      <div class="faint" style="font-size:12px;margin-top:10px">The code is public, so the lock keeps visitors out of the interface. Your data isn't in the code: it lives in your browser and your private Gist.</div></div>
     </div>
   </div>`;
 }
@@ -1344,7 +1345,6 @@ const A={
   jMood:d=>{const n=S.notes.find(x=>x.id===jId);n.mood=n.mood===+d.v?0:+d.v;save();render()},
   delJ:()=>{if(confirm('Delete this journal entry?')){S.notes=S.notes.filter(n=>n.id!==jId);jId=null;save();render()}},
   saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github,repos=$('#sRepos').value.split(',').map(x=>x.trim()).filter(Boolean);Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20,noteRepos:repos});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite();loadGhNotes(true)},
-  changePw:async()=>{const v=$('#sPw').value;if(v.length<4)return toast('Min 4 characters');localStorage.setItem(HKEY,await hash(v));$('#sPw').value='';save();toast('Passphrase changed')},
   syncOn:()=>{const t=$('#sTok').value.trim();if(t)connectSync(t)},
   syncNow:async()=>{await pullGist();if(syncSt.s!=='err')await pushGist();toast(syncSt.s==='err'?syncSt.msg:'Synced')},
   syncOff:()=>{if(confirm('Disconnect cloud sync on this browser? (Your Gist is kept.)')){localStorage.removeItem(SYNC);setSync('off');render()}},
