@@ -4,7 +4,7 @@ A personal dashboard for my CS self-study: weekly plans, roadmap, course notes, 
 
 It's one `index.html` file with no build step, no framework and no server, hosted on GitHub Pages at **app.ibrahimmustafaopu.com**.
 
-> Built with AI. I designed the features and directed the build; the code was written with Claude (Claude chat for the first version, Claude Code for the later features).
+> **A vibe-coding project built with Claude.** This is a demo of what I can build with AI. I came up with the ideas, described the features and tested the results; Claude wrote the code (Claude chat for the first version, Claude Code for everything after). I didn't hand-write the code here. My own hand-written work is in my learning repos ([math](https://github.com/ibrahim787898m/math), [dsa](https://github.com/ibrahim787898m/dsa), [cs50x](https://github.com/ibrahim787898m/cs50x)).
 
 ---
 
