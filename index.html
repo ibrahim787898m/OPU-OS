@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPU/OS — Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0c10; --panel:#11141b; --panel2:#161a23; --line:#222836; --line2:#2c3343;
+  --text:#e7eaf0; --dim:#8a93a6; --faint:#566074;
+  --acc:#b8f34a; --acc-d:rgba(184,243,74,.12); --blue:#6ea8fe; --pink:#ff7ab6; --amber:#ffc65c; --red:#ff6b6b;
+  --r:14px; --mono:'JetBrains Mono',ui-monospace,monospace; --sans:'Space Grotesk',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;background:
+  radial-gradient(900px 500px at 85% -10%,rgba(184,243,74,.07),transparent 60%),
+  radial-gradient(700px 500px at -10% 110%,rgba(110,168,254,.06),transparent 60%);z-index:0}
+button,input,select,textarea{font:inherit;color:inherit}
+a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+.mono{font-family:var(--mono)}
+.label{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim)}
+
+/* ---------- lock screen ---------- */
+#lock{position:fixed;inset:0;display:grid;place-items:center;z-index:50;background:var(--bg)}
+#lock .box{width:min(400px,90vw);position:relative;z-index:1}
+#lock h1{font-size:44px;letter-spacing:-.03em;line-height:1}
+#lock h1 span{color:var(--acc)}
+#lock p{color:var(--dim);margin:10px 0 28px}
+#lock input{width:100%;padding:14px 16px;background:var(--panel);border:1px solid var(--line2);border-radius:10px;font-family:var(--mono);outline:none}
+#lock input:focus{border-color:var(--acc)}
+#lock .err{color:var(--red);font-size:13px;min-height:20px;margin-top:8px;font-family:var(--mono)}
+.grid-bg{position:fixed;inset:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:44px 44px;opacity:.25;mask-image:radial-gradient(circle at center,#000 0,transparent 70%)}
+
+/* ---------- layout ---------- */
+#app{display:none;position:relative;z-index:1;min-height:100vh}
+#app.on{display:grid;grid-template-columns:240px 1fr}
+aside{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:4px;background:rgba(10,12,16,.7);backdrop-filter:blur(8px)}
+.brand{font-weight:700;font-size:20px;letter-spacing:-.02em;padding:0 10px 18px}
+.brand span{color:var(--acc)}
+.brand small{display:block;font-family:var(--mono);font-size:10px;color:var(--faint);letter-spacing:.14em;font-weight:400;margin-top:2px}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;color:var(--dim);cursor:pointer;border:1px solid transparent;background:none;width:100%;text-align:left}
+.nav:hover{color:var(--text);background:var(--panel)}
+.nav.on{color:var(--text);background:var(--panel2);border-color:var(--line2)}
+.nav.on .ico{color:var(--acc)}
+.nav .ico{width:18px;text-align:center;font-family:var(--mono);font-size:13px}
+.nav kbd{margin-left:auto}
+kbd{font-family:var(--mono);font-size:10px;padding:2px 6px;border:1px solid var(--line2);border-radius:5px;color:var(--faint)}
+.side-bottom{margin-top:auto;display:flex;flex-direction:column;gap:10px}
+.timer{border:1px solid var(--line2);border-radius:12px;padding:12px;background:var(--panel)}
+.timer .t{font-family:var(--mono);font-size:28px;font-weight:700;letter-spacing:-.02em}
+.timer.run .t{color:var(--acc)}
+.timer .row{display:flex;gap:6px;margin-top:8px}
+main{padding:34px 40px 80px;max-width:1280px;width:100%}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:26px;flex-wrap:wrap}
+.head h2{font-size:32px;letter-spacing:-.03em;line-height:1.1}
+.head .sub{color:var(--dim);margin-top:4px}
+
+/* ---------- components ---------- */
+.btn{padding:8px 14px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);cursor:pointer;font-size:14px;white-space:nowrap}
+.btn:hover{border-color:var(--faint)}
+.btn.pri{background:var(--acc);color:#0a0c10;border-color:var(--acc);font-weight:600}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.sm{padding:4px 10px;font-size:12px;border-radius:7px}
+.btn.ghost{background:none}
+.btn.danger{color:var(--red)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.card h3{font-size:13px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:500;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.g{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.span2{grid-column:span 2}.span3{grid-column:span 3}
+.stat .v{font-size:34px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.stat .v small{font-size:15px;color:var(--dim);font-weight:500}
+.stat .k{margin-top:6px}
+.meter{height:6px;background:var(--line);border-radius:4px;overflow:hidden;margin-top:12px}
+.meter i{display:block;height:100%;background:var(--acc);border-radius:4px;transition:width .6s}
+.pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line2);color:var(--dim);white-space:nowrap}
+.pill.todo{color:var(--dim)}
+.pill.doing{color:var(--amber);border-color:rgba(255,198,92,.35)}
+.pill.done{color:var(--acc);border-color:rgba(184,243,74,.35)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+.list{display:flex;flex-direction:column}
+.li{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.li:last-child{border-bottom:none}
+.li .grow{flex:1;min-width:0}
+.li .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.muted{color:var(--dim)} .faint{color:var(--faint)}
+.empty{color:var(--faint);font-family:var(--mono);font-size:13px;padding:14px 0}
+.clickable{cursor:pointer}
+.clickable:hover{border-color:var(--line2)}
+.hero{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:26px}
+.hero h2{font-size:40px;letter-spacing:-.035em;line-height:1.05}
+.hero h2 em{font-style:normal;color:var(--acc)}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+
+/* roadmap */
+.track{display:flex;flex-direction:column;gap:8px}
+.step{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.step .n{font-family:var(--mono);font-size:11px;color:var(--faint);width:22px}
+.step.done .title{color:var(--dim);text-decoration:line-through;text-decoration-color:var(--faint)}
+.step .title{flex:1}
+
+/* kanban */
+.kanban{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px;min-height:200px}
+.col h4{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:500;margin-bottom:10px;display:flex;justify-content:space-between}
+.jcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
+.jcard:hover{border-color:var(--line2)}
+.jcard .co{font-weight:600}
+.jcard .ro{color:var(--dim);font-size:13px}
+.jcard .ft{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.jcard .mv{display:flex;gap:4px}
+.due{color:var(--amber)} .over{color:var(--red)}
+
+/* skills */
+.lvl{display:flex;gap:4px}
+.lvl i{width:22px;height:6px;border-radius:3px;background:var(--line2)}
+.lvl i.on{background:var(--acc)}
+
+/* notes */
+.notes{display:grid;grid-template-columns:280px 1fr;gap:16px;min-height:70vh}
+.nlist{display:flex;flex-direction:column;gap:6px;overflow:auto;max-height:75vh}
+.nitem{padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;background:var(--panel)}
+.nitem.on{border-color:var(--acc);background:var(--acc-d)}
+.nitem .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.editor{display:flex;flex-direction:column;gap:10px}
+.editor input.title{font-size:26px;font-weight:700;background:none;border:none;outline:none;letter-spacing:-.02em}
+.editor textarea{flex:1;min-height:55vh;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;font-family:var(--mono);font-size:14px;line-height:1.7;outline:none;resize:vertical}
+.editor textarea:focus{border-color:var(--line2)}
+.prose{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:20px 24px;min-height:55vh;line-height:1.7}
+.prose h1,.prose h2,.prose h3{margin:14px 0 6px;letter-spacing:-.02em}
+.prose code{font-family:var(--mono);background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:13px}
+.prose pre{background:#07080b;border:1px solid var(--line);padding:12px;border-radius:10px;overflow:auto;margin:10px 0}
+.prose pre code{background:none;padding:0}
+.prose ul{padding-left:20px}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:9px;overflow:hidden}
+.seg button{padding:6px 12px;background:none;border:none;cursor:pointer;color:var(--dim);font-size:13px}
+.seg button.on{background:var(--panel2);color:var(--text)}
+
+/* github */
+.repo{display:flex;flex-direction:column;gap:6px}
+.lang{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:6px 0 12px}
+.ev{font-family:var(--mono);font-size:12.5px}
+
+/* table */
+table{width:100%;border-collapse:collapse}
+th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:500;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line2)}
+td{padding:10px;border-bottom:1px solid var(--line);font-size:14px}
+tr:hover td{background:rgba(255,255,255,.015)}
+
+/* modal / palette */
+.overlay{position:fixed;inset:0;background:rgba(5,6,9,.72);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;padding-top:10vh;z-index:40}
+.overlay.on{display:flex}
+.modal{width:min(520px,92vw);background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:22px;box-shadow:0 30px 80px rgba(0,0,0,.5);max-height:80vh;overflow:auto}
+.modal h3{font-size:20px;margin-bottom:16px;letter-spacing:-.02em}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.field input,.field select,.field textarea{background:var(--panel2);border:1px solid var(--line2);border-radius:9px;padding:9px 12px;outline:none}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--acc)}
+.field textarea{min-height:90px;resize:vertical}
+.mfoot{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.mfoot .left{margin-right:auto}
+.pal{width:min(560px,92vw);background:var(--panel);border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+.pal input{width:100%;padding:16px 18px;background:none;border:none;border-bottom:1px solid var(--line);outline:none;font-size:16px}
+.pal .items{max-height:50vh;overflow:auto;padding:6px}
+.pal .it{padding:10px 12px;border-radius:9px;display:flex;justify-content:space-between;cursor:pointer}
+.pal .it.on{background:var(--panel2)}
+.pal .it span:last-child{font-family:var(--mono);font-size:11px;color:var(--faint)}
+.toast{position:fixed;bottom:22px;right:22px;background:var(--panel2);border:1px solid var(--line2);padding:10px 16px;border-radius:10px;font-family:var(--mono);font-size:13px;z-index:60;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none}
+.toast.on{opacity:1;transform:none}
+.status{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px}
+.status.up{color:var(--acc)} .status.down{color:var(--red)} .status.chk{color:var(--dim)}
+.pulse{animation:p 1.6s infinite}
+@keyframes p{50%{opacity:.35}}
+.fade{animation:f .35s ease}
+@keyframes f{from{opacity:0;transform:translateY(6px)}}
+
+@media (max-width:980px){
+  #app.on{grid-template-columns:1fr}
+  aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;border-right:none;border-bottom:1px solid var(--line)}
+  .brand{width:100%;padding-bottom:8px}
+  .nav{width:auto}.nav kbd{display:none}
+  .side-bottom{width:100%;flex-direction:row}
+  main{padding:24px 18px 60px}
+  .g2,.g3,.g4{grid-template-columns:1fr}.span2,.span3{grid-column:auto}
+  .notes{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ LOCK ============ -->
+<div id="lock">
+  <div class="grid-bg"></div>
+  <div class="box fade">
+    <div class="label" style="margin-bottom:14px">// command center</div>
+    <h1>OPU<span>/</span>OS</h1>
+    <p id="lockMsg">Enter your passphrase.</p>
+    <form id="lockForm">
+      <input id="lockInput" type="password" placeholder="passphrase" autocomplete="current-password" autofocus>
+      <input id="lockInput2" type="password" placeholder="confirm passphrase" style="margin-top:10px;display:none" autocomplete="new-password">
+      <div class="err" id="lockErr"></div>
+      <button class="btn pri" style="width:100%;padding:12px;margin-top:6px" id="lockBtn">Unlock →</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <aside>
+    <div class="brand">OPU<span>/</span>OS<small>IBRAHIM'S COMMAND CENTER</small></div>
+    <button class="nav" data-act="go" data-v="dash"><span class="ico">◆</span>Dashboard<kbd>1</kbd></button>
+    <button class="nav" data-act="go" data-v="study"><span class="ico">▲</span>Study<kbd>2</kbd></button>
+    <button class="nav" data-act="go" data-v="skills"><span class="ico">●</span>Skills<kbd>3</kbd></button>
+    <button class="nav" data-act="go" data-v="projects"><span class="ico">■</span>Projects<kbd>4</kbd></button>
+    <button class="nav" data-act="go" data-v="career"><span class="ico">➜</span>Career<kbd>5</kbd></button>
+    <button class="nav" data-act="go" data-v="github"><span class="ico">⌥</span>GitHub<kbd>6</kbd></button>
+    <button class="nav" data-act="go" data-v="notes"><span class="ico">¶</span>Notes &amp; Journal<kbd>7</kbd></button>
+    <button class="nav" data-act="go" data-v="links"><span class="ico">@</span>Presence<kbd>8</kbd></button>
+    <button class="nav" data-act="go" data-v="settings"><span class="ico">⚙</span>Settings<kbd>9</kbd></button>
+    <div class="side-bottom">
+      <div class="timer" id="timer">
+        <div class="label">Focus</div>
+        <div class="t" id="timerT">25:00</div>
+        <div class="row" id="timerRow"></div>
+      </div>
+      <button class="btn ghost sm" data-act="palette" style="text-align:left">⌘ Command <kbd style="float:right">Ctrl K</kbd></button>
+    </div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<div class="overlay" id="modalWrap"><div class="modal" id="modal"></div></div>
+<div class="overlay" id="palWrap"><div class="pal"><input id="palInput" placeholder="Type a command or search…"><div class="items" id="palItems"></div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   OPU/OS — single-file personal command center
+   Data lives in localStorage (key: opuos.v1). Export/Import in Settings.
+   ========================================================= */
+const KEY='opuos.v1', HKEY='opuos.hash', SKEY='opuos.unlocked';
+const $=s=>document.querySelector(s);
+const uid=()=>Math.random().toString(36).slice(2,10);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const today=()=>new Date().toLocaleDateString('en-CA');
+const dstr=d=>d.toLocaleDateString('en-CA');
+const addDays=(s,n)=>{const d=new Date(s+'T00:00');d.setDate(d.getDate()+n);return dstr(d)};
+const fmtDate=s=>s?new Date(s+'T00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+const ago=iso=>{const m=(Date.now()-new Date(iso))/6e4;if(m<60)return Math.round(m)+'m ago';if(m<1440)return Math.round(m/60)+'h ago';return Math.round(m/1440)+'d ago'};
+
+/* ---------------- seed ---------------- */
+function seed(){
+  const r=(track,arr,st={})=>arr.map((t,i)=>({id:uid(),track,title:t,status:st[i]||'todo'}));
+  return {
+    settings:{name:'Ibrahim',github:'',site:'https://ibrahimmustafaopu.com',weeklyGoal:20},
+    roadmap:[
+      ...r('CS50X',['Week 0 · Scratch','Week 1 · C','Week 2 · Arrays','Week 3 · Algorithms','Week 4 · Memory','Week 5 · Data Structures','Week 6 · Python','Week 7 · SQL','Week 8 · HTML, CSS, JavaScript','Week 9 · Flask','Week 10 · Final Project']),
+      ...r('DSA',['Arrays & Hashing','Two Pointers','Sliding Window','Stack','Binary Search','Linked List','Trees','Tries','Heap / Priority Queue','Backtracking','Graphs','Dynamic Programming']),
+      ...r('Security',['OverTheWire · Bandit','TryHackMe · Pre-Security','PortSwigger · Web Security Academy','picoCTF'],{0:'doing'}),
+    ],
+    sessions:[],
+    skills:[
+      {id:uid(),name:'Python',cat:'Languages',level:3,notes:'CS50P certificate'},
+      {id:uid(),name:'C',cat:'Languages',level:2,notes:'CS50X'},
+      {id:uid(),name:'HTML & CSS',cat:'Web',level:3,notes:'Portfolio site'},
+      {id:uid(),name:'JavaScript',cat:'Web',level:2,notes:''},
+      {id:uid(),name:'SQL',cat:'Data',level:1,notes:''},
+      {id:uid(),name:'Git & GitHub',cat:'Tools',level:3,notes:'SSH keys, Pages'},
+      {id:uid(),name:'Linux / WSL',cat:'Tools',level:2,notes:'Bandit, WSL2 toolchain'},
+      {id:uid(),name:'Interpreters',cat:'CS',level:2,notes:'Built Whisper'},
+      {id:uid(),name:'Web security basics',cat:'Security',level:2,notes:'SQLi, brute force, phishing'},
+    ],
+    projects:[
+      {id:uid(),name:'Whisper',status:'Active',desc:'My own programming language — built to learn how interpreters work.',link:'',next:''},
+      {id:uid(),name:'desk-buddy',status:'Planning',desc:'A cute desktop companion that keeps me company while I code.',link:'',next:'Write the planning doc: problem, MVP, design sketch'},
+      {id:uid(),name:'Portfolio v3',status:'Active',desc:'Replace v1 + v2 with one clean portfolio.',link:'https://ibrahimmustafaopu.com',next:''},
+      {id:uid(),name:'CodeKen',status:'Active',desc:'Coding education website.',link:'',next:''},
+      {id:uid(),name:'OPU/OS',status:'Shipped',desc:'This command center.',link:'',next:''},
+    ],
+    jobs:[
+      {id:uid(),company:'DataAnnotation',role:'AI Annotation (Remote)',status:'applied',date:'',followUp:'',link:'',notes:'Assessment submitted, waiting to hear back.'},
+      {id:uid(),company:'Red Lobster',role:'Line Cook',status:'interview',date:'',followUp:'',link:'',notes:'STAR answers prepared.'},
+      {id:uid(),company:'Security roles (Toronto)',role:'Security Guard',status:'wishlist',date:'',followUp:'',link:'',notes:'Ontario Security Guard Licence in progress.'},
+    ],
+    notes:[{id:uid(),type:'note',title:'Welcome to OPU/OS',body:'# Command center\n\nEverything in one place.\n\n- **Ctrl+K** opens the command palette\n- Keys **1–9** jump between sections\n- The focus timer logs study sessions automatically\n\n```\nprint("hello, world")\n```',updated:Date.now()}],
+    links:[
+      {id:uid(),label:'Portfolio',url:'https://ibrahimmustafaopu.com'},
+      {id:uid(),label:'GitHub',url:''},
+      {id:uid(),label:'LinkedIn',url:''},
+      {id:uid(),label:'LeetCode',url:''},
+      {id:uid(),label:'Notion',url:''},
+    ],
+    gh:null,
+  };
+}
+let S;
+function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){} if(!S)S=seed(),save()}
+function save(){localStorage.setItem(KEY,JSON.stringify(S))}
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),1800)}
+
+/* ---------------- lock ---------------- */
+async function hash(s){
+  if(window.crypto?.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('opuos::'+s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+  let h=5381;for(const c of 'opuos::'+s)h=((h<<5)+h+c.charCodeAt(0))|0;return 'f'+h;
+}
+function initLock(){
+  const has=!!localStorage.getItem(HKEY);
+  if(!has){$('#lockMsg').textContent='First run — create a passphrase to protect your command center.';$('#lockInput2').style.display='block';$('#lockBtn').textContent='Create & enter →'}
+  $('#lockForm').onsubmit=async e=>{
+    e.preventDefault();const v=$('#lockInput').value;
+    if(!has){
+      if(v.length<4)return $('#lockErr').textContent='Use at least 4 characters.';
+      if(v!==$('#lockInput2').value)return $('#lockErr').textContent='Passphrases do not match.';
+      localStorage.setItem(HKEY,await hash(v));
+    }else if(await hash(v)!==localStorage.getItem(HKEY)){
+      $('#lockErr').textContent='ACCESS DENIED';$('#lockInput').value='';return;
+    }
+    sessionStorage.setItem(SKEY,'1');enter();
+  };
+  if(has&&sessionStorage.getItem(SKEY))enter();
+}
+function enter(){$('#lock').style.display='none';$('#app').classList.add('on');load();go(location.hash.slice(1)||'dash');renderTimer();checkSite();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)}
+function lock(){sessionStorage.removeItem(SKEY);location.reload()}
+
+/* ---------------- stats helpers ---------------- */
+const minsByDay=()=>{const m={};S.sessions.forEach(s=>m[s.date]=(m[s.date]||0)+(+s.minutes||0));return m};
+function weekStart(){const d=new Date();const k=(d.getDay()+6)%7;d.setDate(d.getDate()-k);return dstr(d)}
+function weekMinutes(){const ws=weekStart();return S.sessions.filter(s=>s.date>=ws).reduce((a,s)=>a+(+s.minutes||0),0)}
+function streak(){const m=minsByDay();let d=today(),n=0;if(!m[d])d=addDays(d,-1);while(m[d]){n++;d=addDays(d,-1)}return n}
+const solved=()=>S.sessions.reduce((a,s)=>a+(+s.problems||0),0);
+const pct=t=>{const r=S.roadmap.filter(x=>!t||x.track===t);return r.length?Math.round(r.filter(x=>x.status==='done').length/r.length*100):0};
+const hm=m=>m>=60?`${Math.floor(m/60)}h ${m%60?m%60+'m':''}`.trim():`${m}m`;
+
+/* ---------------- router ---------------- */
+let view='dash';
+const views={dash,study,skills,projects,career,github,notes,links,settings};
+function go(v){if(!views[v])v='dash';view=v;location.hash=v;document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('on',n.dataset.v===v));render();window.scrollTo(0,0)}
+function render(){$('#main').innerHTML=`<div class="fade">${views[view]()}</div>`;after[view]?.()}
+const after={};
+
+/* ---------------- DASHBOARD ---------------- */
+function dash(){
+  const h=new Date().getHours(),greet=h<12?'Good morning':h<18?'Good afternoon':'Good evening';
+  const wm=weekMinutes(),goal=S.settings.weeklyGoal*60,active=S.jobs.filter(j=>['applied','interview'].includes(j.status)).length;
+  const doing=S.roadmap.filter(r=>r.status==='doing');
+  const due=S.jobs.filter(j=>j.followUp&&j.followUp<=addDays(today(),3)&&!['rejected','offer'].includes(j.status)).sort((a,b)=>a.followUp.localeCompare(b.followUp));
+  const gh=S.gh;
+  return `
+  <div class="hero">
+    <div><div class="label">${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+    <h2>${greet}, <em>${esc(S.settings.name)}</em>.</h2>
+    <div class="muted" style="margin-top:6px">${doing.length?`Currently on: ${doing.map(d=>esc(d.title)).join(' · ')}`:'Pick something from your roadmap to start today.'}</div></div>
+    <div class="chips"><button class="btn" data-act="logSession">+ Log session</button><button class="btn" data-act="addJob">+ Application</button><button class="btn pri" data-act="timerStart" data-m="25">▶ Focus 25</button></div>
+  </div>
+  <div class="g g4">
+    <div class="card stat"><div class="label">This week</div><div class="v">${(wm/60).toFixed(1)}<small> / ${S.settings.weeklyGoal}h</small></div><div class="meter"><i style="width:${Math.min(100,wm/goal*100)}%"></i></div></div>
+    <div class="card stat"><div class="label">Study streak</div><div class="v">${streak()}<small> day${streak()===1?'':'s'}</small></div><div class="k faint mono" style="font-size:12px">${hm(S.sessions.reduce((a,s)=>a+(+s.minutes||0),0))} all-time</div></div>
+    <div class="card stat"><div class="label">Problems solved</div><div class="v">${solved()}</div><div class="k faint mono" style="font-size:12px">DSA roadmap ${pct('DSA')}%</div></div>
+    <div class="card stat"><div class="label">Active applications</div><div class="v">${active}</div><div class="k faint mono" style="font-size:12px">${S.jobs.filter(j=>j.status==='interview').length} interviewing</div></div>
+
+    <div class="card span3"><h3>Study activity · last 30 weeks <span class="faint" style="text-transform:none;letter-spacing:0">${S.sessions.length} sessions</span></h3><div id="heat"></div></div>
+    <div class="card"><h3>Roadmap</h3>${['CS50X','DSA','Security'].map(t=>`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between"><span>${t}</span><span class="mono muted">${pct(t)}%</span></div><div class="meter" style="margin-top:6px"><i style="width:${pct(t)}%;background:${t==='CS50X'?'var(--acc)':t==='DSA'?'var(--blue)':'var(--pink)'}"></i></div></div>`).join('')}</div>
+
+    <div class="card span2"><h3>Last 7 days</h3><div id="bars"></div></div>
+    <div class="card span2"><h3>Follow-ups due <button class="btn sm ghost" data-act="go" data-v="career">Career →</button></h3>
+      <div class="list">${due.length?due.map(j=>`<div class="li clickable" data-act="editJob" data-id="${j.id}"><div class="grow"><div class="t">${esc(j.company)}</div><div class="muted" style="font-size:13px">${esc(j.role)}</div></div><span class="mono ${j.followUp<today()?'over':'due'}" style="font-size:12px">${j.followUp<today()?'overdue':fmtDate(j.followUp)}</span></div>`).join(''):'<div class="empty">No follow-ups in the next 3 days.</div>'}</div></div>
+
+    <div class="card span2"><h3>GitHub pulse <button class="btn sm ghost" data-act="go" data-v="github">Open →</button></h3>
+      ${gh?`<div class="list">${gh.events.slice(0,5).map(e=>`<div class="li"><div class="grow ev t">${evLabel(e)}</div><span class="faint mono" style="font-size:11px">${ago(e.at)}</span></div>`).join('')||'<div class="empty">No recent public activity.</div>'}</div>`:`<div class="empty">Connect your GitHub username in Settings.</div>`}
+    </div>
+    <div class="card"><h3>Projects</h3><div class="list">${S.projects.filter(p=>p.status!=='Shipped').slice(0,4).map(p=>`<div class="li"><div class="grow t">${esc(p.name)}</div><span class="pill ${p.status==='Active'?'doing':''}">${esc(p.status)}</span></div>`).join('')}</div></div>
+    <div class="card"><h3>Presence</h3>
+      <div style="margin-bottom:12px"><div class="muted" style="font-size:13px">${esc(S.settings.site.replace(/^https?:\/\//,''))}</div><span id="siteStatus" class="status chk"><span class="dot pulse"></span>checking…</span></div>
+      <div class="list">${S.links.filter(l=>l.url).slice(0,4).map(l=>`<div class="li"><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)} ↗</a></div>`).join('')}</div>
+    </div>
+  </div>`;
+}
+after.dash=()=>{drawHeat();drawBars();paintSite()};
+
+function drawHeat(){
+  const m=minsByDay(),W=30,cell=13,gap=3,end=new Date();end.setDate(end.getDate()+(6-end.getDay()));
+  const start=new Date(end);start.setDate(start.getDate()-(W*7-1));
+  const max=Math.max(60,...Object.values(m));let out='',d=new Date(start);
+  for(let w=0;w<W;w++)for(let k=0;k<7;k++){
+    const s=dstr(d),v=m[s]||0,fut=s>today();
+    const op=v?0.25+0.75*Math.min(1,v/max):0;
+    out+=`<rect x="${w*(cell+gap)+28}" y="${k*(cell+gap)}" width="${cell}" height="${cell}" rx="3" fill="${v?`rgba(184,243,74,${op})`:'#1a1f2a'}" opacity="${fut?0.25:1}"><title>${fmtDate(s)} — ${v?hm(v):'no study'}</title></rect>`;
+    d.setDate(d.getDate()+1);
+  }
+  const lbl=['','Mon','','Wed','','Fri',''].map((t,i)=>`<text x="0" y="${i*(cell+gap)+10}" fill="#566074" font-size="9" font-family="JetBrains Mono">${t}</text>`).join('');
+  $('#heat').innerHTML=`<svg viewBox="0 0 ${W*(cell+gap)+28} ${7*(cell+gap)}" style="width:100%">${lbl}${out}</svg>`;
+}
+function drawBars(){
+  const m=minsByDay(),days=[...Array(7)].map((_,i)=>addDays(today(),i-6)),max=Math.max(60,...days.map(d=>m[d]||0));
+  const W=560,H=150,bw=52,gap=(W-bw*7)/6;
+  $('#bars').innerHTML=`<svg viewBox="0 0 ${W} ${H+22}" style="width:100%">${days.map((d,i)=>{const v=m[d]||0,h=Math.max(3,(v/max)*(H-20));return `<g><rect x="${i*(bw+gap)}" y="${H-h}" width="${bw}" height="${h}" rx="6" fill="${d===today()?'#b8f34a':'#2c3343'}"><title>${hm(v)}</title></rect>${v?`<text x="${i*(bw+gap)+bw/2}" y="${H-h-6}" text-anchor="middle" fill="#8a93a6" font-size="11" font-family="JetBrains Mono">${hm(v)}</text>`:''}<text x="${i*(bw+gap)+bw/2}" y="${H+16}" text-anchor="middle" fill="#566074" font-size="11" font-family="JetBrains Mono">${new Date(d+'T00:00').toLocaleDateString('en-US',{weekday:'short'})}</text></g>`}).join('')}</svg>`;
+}
+
+/* ---------------- STUDY ---------------- */
+let studyTrack='CS50X';
+function study(){
+  const tracks=[...new Set(S.roadmap.map(r=>r.track))];
+  const items=S.roadmap.filter(r=>r.track===studyTrack);
+  const ses=[...S.sessions].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,25);
+  return `
+  <div class="head"><div><h2>Study</h2><div class="sub">Roadmap, sessions, and the grind — tracked.</div></div>
+  <div class="chips"><button class="btn" data-act="addStep">+ Roadmap item</button><button class="btn pri" data-act="logSession">+ Log session</button></div></div>
+  <div class="g g2">
+    <div class="card"><h3><span>Roadmap</span><span class="seg">${tracks.map(t=>`<button class="${t===studyTrack?'on':''}" data-act="track" data-t="${esc(t)}">${esc(t)}</button>`).join('')}</span></h3>
+      <div class="meter" style="margin:-4px 0 14px"><i style="width:${pct(studyTrack)}%"></i></div>
+      <div class="track">${items.map((r,i)=>`<div class="step ${r.status}"><span class="n">${String(i+1).padStart(2,'0')}</span><span class="title">${esc(r.title)}</span><button class="pill ${r.status} clickable" style="background:none" data-act="cycle" data-id="${r.id}"><span class="dot"></span>${r.status}</button><button class="btn sm ghost" data-act="editStep" data-id="${r.id}">✎</button></div>`).join('')||'<div class="empty">No items yet.</div>'}</div>
+      <div class="faint mono" style="font-size:11px;margin-top:10px">click a status to cycle todo → doing → done</div>
+    </div>
+    <div class="g" style="align-content:start">
+      <div class="g g3">
+        <div class="card stat"><div class="label">Week</div><div class="v">${(weekMinutes()/60).toFixed(1)}<small>h</small></div></div>
+        <div class="card stat"><div class="label">Streak</div><div class="v">${streak()}<small>d</small></div></div>
+        <div class="card stat"><div class="label">Solved</div><div class="v">${solved()}</div></div>
+      </div>
+      <div class="card"><h3>Recent sessions</h3>
+      ${ses.length?`<table><tr><th>Date</th><th>Topic</th><th>Time</th><th>#</th><th></th></tr>${ses.map(s=>`<tr><td class="mono muted">${fmtDate(s.date)}</td><td>${esc(s.topic)}<div class="faint" style="font-size:12px">${esc(s.track||'')}</div></td><td class="mono">${hm(+s.minutes)}</td><td class="mono">${s.problems||''}</td><td><button class="btn sm ghost" data-act="editSession" data-id="${s.id}">✎</button></td></tr>`).join('')}</table>`:'<div class="empty">No sessions yet — start the focus timer or log one.</div>'}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------------- SKILLS ---------------- */
+function skills(){
+  const cats=[...new Set(S.skills.map(s=>s.cat))];
+  return `<div class="head"><div><h2>Skills</h2><div class="sub">${S.skills.length} skills · honest levels, 1–5.</div></div><button class="btn pri" data-act="addSkill">+ Skill</button></div>
+  ${cats.map(c=>`<div class="label" style="margin:22px 0 10px">${esc(c)}</div><div class="g g3">${S.skills.filter(s=>s.cat===c).map(s=>`
+    <div class="card clickable" data-act="editSkill" data-id="${s.id}"><div style="display:flex;justify-content:space-between;align-items:center"><strong>${esc(s.name)}</strong><span class="mono muted" style="font-size:12px">${s.level}/5</span></div>
+    <div class="lvl" style="margin:10px 0 8px">${[1,2,3,4,5].map(n=>`<i class="${n<=s.level?'on':''}"></i>`).join('')}</div><div class="muted" style="font-size:13px">${esc(s.notes)||'&nbsp;'}</div></div>`).join('')}</div>`).join('')}`;
+}
+
+/* ---------------- PROJECTS ---------------- */
+function projects(){
+  const col={Active:'doing',Planning:'',Shipped:'done',Paused:''};
+  return `<div class="head"><div><h2>Projects</h2><div class="sub">What I'm building, and the next move on each.</div></div><button class="btn pri" data-act="addProject">+ Project</button></div>
+  <div class="g g3">${S.projects.map(p=>`<div class="card clickable" data-act="editProject" data-id="${p.id}">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong style="font-size:18px">${esc(p.name)}</strong><span class="pill ${col[p.status]||''}"><span class="dot"></span>${esc(p.status)}</span></div>
+    <p class="muted" style="margin:8px 0 12px;font-size:14px">${esc(p.desc)}</p>
+    ${p.next?`<div class="label" style="margin-bottom:4px">Next</div><div style="font-size:14px">${esc(p.next)}</div>`:''}
+    ${p.link?`<div style="margin-top:10px"><a href="${esc(p.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(p.link.replace(/^https?:\/\//,''))} ↗</a></div>`:''}
+  </div>`).join('')}</div>`;
+}
+
+/* ---------------- CAREER ---------------- */
+const JS=[['wishlist','Wishlist'],['applied','Applied'],['interview','Interview'],['offer','Offer'],['rejected','Closed']];
+function career(){
+  const n=k=>S.jobs.filter(j=>j.status===k).length;
+  return `<div class="head"><div><h2>Career</h2><div class="sub">Job hunt + co-op pipeline. ${S.jobs.length} tracked · ${n('interview')} interviewing.</div></div><button class="btn pri" data-act="addJob">+ Application</button></div>
+  <div class="kanban">${JS.map(([k,l],ci)=>`<div class="col"><h4>${l}<span>${n(k)}</span></h4>
+    ${S.jobs.filter(j=>j.status===k).map(j=>`<div class="jcard" data-act="editJob" data-id="${j.id}"><div class="co">${esc(j.company)}</div><div class="ro">${esc(j.role)}</div>
+      <div class="ft"><span class="mono" style="font-size:11px">${j.followUp?`<span class="${j.followUp<today()?'over':j.followUp<=addDays(today(),3)?'due':'faint'}">↻ ${fmtDate(j.followUp)}</span>`:`<span class="faint">${j.date?fmtDate(j.date):''}</span>`}</span>
+      <span class="mv">${ci>0?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="-1">←</button>`:''}${ci<JS.length-1?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="1">→</button>`:''}</span></div></div>`).join('')}
+  </div>`).join('')}</div>`;
+}
+
+/* ---------------- GITHUB ---------------- */
+function evLabel(e){
+  const r=`<span style="color:var(--text)">${esc(e.repo.split('/')[1]||e.repo)}</span>`;
+  return {PushEvent:`<span style="color:var(--acc)">push</span> ${e.n||''} commit${e.n===1?'':'s'} → ${r}`,CreateEvent:`<span style="color:var(--blue)">create</span> ${esc(e.ref||'')} ${r}`,WatchEvent:`<span style="color:var(--amber)">star</span> ${r}`,ForkEvent:`<span style="color:var(--pink)">fork</span> ${r}`,PullRequestEvent:`<span style="color:var(--blue)">PR</span> ${r}`,IssuesEvent:`<span style="color:var(--amber)">issue</span> ${r}`}[e.type]||`${esc(e.type.replace('Event',''))} ${r}`;
+}
+const LC=['#b8f34a','#6ea8fe','#ff7ab6','#ffc65c','#9b8cff','#4fd1c5','#ff8a5c','#8a93a6'];
+function github(){
+  const g=S.gh,u=S.settings.github;
+  if(!u)return `<div class="head"><div><h2>GitHub</h2><div class="sub">Live repo tracking.</div></div></div>
+    <div class="card" style="max-width:480px"><h3>Connect</h3><div class="field"><span class="label">GitHub username</span><input id="ghU" placeholder="your-username"></div><button class="btn pri" data-act="ghSet">Connect & sync</button><div class="faint" style="font-size:13px;margin-top:10px">Uses GitHub's public API — no token needed.</div></div>`;
+  if(!g)return `<div class="head"><div><h2>GitHub</h2></div><button class="btn" data-act="ghSync">↻ Sync</button></div><div class="empty">Syncing @${esc(u)}…</div>`;
+  const repos=g.repos.filter(r=>!r.fork),langs={};repos.forEach(r=>{if(r.lang)langs[r.lang]=(langs[r.lang]||0)+1});
+  const L=Object.entries(langs).sort((a,b)=>b[1]-a[1]),tot=L.reduce((a,x)=>a+x[1],0)||1;
+  const stale=repos.filter(r=>(Date.now()-new Date(r.pushed))/864e5>30);
+  return `<div class="head"><div><h2>GitHub</h2><div class="sub">@${esc(u)} · synced ${ago(g.at)}</div></div><button class="btn" data-act="ghSync">↻ Sync</button></div>
+  <div class="g g4">
+    <div class="card stat"><div class="label">Public repos</div><div class="v">${g.user.repos}</div></div>
+    <div class="card stat"><div class="label">Stars earned</div><div class="v">${repos.reduce((a,r)=>a+r.stars,0)}</div></div>
+    <div class="card stat"><div class="label">Followers</div><div class="v">${g.user.followers}</div></div>
+    <div class="card stat"><div class="label">Need attention</div><div class="v" style="color:${stale.length?'var(--amber)':'var(--acc)'}">${stale.length}</div><div class="faint mono" style="font-size:11px">no push in 30d+</div></div>
+    <div class="card span2"><h3>Repositories</h3><div class="lang">${L.map(([l,c],i)=>`<i title="${esc(l)}" style="width:${c/tot*100}%;background:${LC[i%LC.length]}"></i>`).join('')}</div>
+      <div class="chips" style="margin-bottom:10px">${L.map(([l,c],i)=>`<span class="pill"><span class="dot" style="color:${LC[i%LC.length]}"></span>${esc(l)} ${c}</span>`).join('')}</div>
+      <div class="list">${repos.slice(0,14).map(r=>{const d=(Date.now()-new Date(r.pushed))/864e5;return `<div class="li"><div class="grow"><a href="${esc(r.url)}" target="_blank" rel="noopener" class="t" style="display:block">${esc(r.name)}</a><div class="muted t" style="font-size:13px">${esc(r.desc||'')}</div></div>${r.stars?`<span class="mono faint" style="font-size:12px">★${r.stars}</span>`:''}<span class="mono" style="font-size:11px;color:${d>30?'var(--amber)':'var(--faint)'}">${ago(r.pushed)}</span></div>`}).join('')}</div></div>
+    <div class="card span2"><h3>Recent activity</h3><div class="list">${g.events.map(e=>`<div class="li"><div class="grow ev t">${evLabel(e)}</div><span class="faint mono" style="font-size:11px">${ago(e.at)}</span></div>`).join('')||'<div class="empty">No public events in the last 90 days.</div>'}</div></div>
+  </div>`;
+}
+async function syncGH(quiet){
+  const u=S.settings.github;if(!u)return;
+  try{
+    const f=p=>fetch('https://api.github.com/'+p).then(r=>{if(!r.ok)throw new Error(r.status===404?'User not found':r.status===403?'Rate limited — try later':'GitHub error '+r.status);return r.json()});
+    const [user,repos,events]=await Promise.all([f('users/'+u),f(`users/${u}/repos?sort=pushed&per_page=100`),f(`users/${u}/events/public?per_page=50`)]);
+    S.gh={at:Date.now(),user:{repos:user.public_repos,followers:user.followers},
+      repos:repos.map(r=>({name:r.name,url:r.html_url,desc:r.description,lang:r.language,stars:r.stargazers_count,pushed:r.pushed_at,fork:r.fork})),
+      events:events.slice(0,15).map(e=>({type:e.type,repo:e.repo.name,at:e.created_at,n:e.payload?.commits?.length??e.payload?.size,ref:e.payload?.ref_type}))};
+    save();if(!quiet)toast('GitHub synced');if(['github','dash'].includes(view))render();
+  }catch(err){toast(err.message)}
+}
+
+/* ---------------- NOTES ---------------- */
+let noteId=null,noteMode='edit',noteFilter='all';
+function notes(){
+  const list=S.notes.filter(n=>noteFilter==='all'||n.type===noteFilter).sort((a,b)=>b.updated-a.updated);
+  if(!noteId||!S.notes.find(n=>n.id===noteId))noteId=list[0]?.id;
+  const n=S.notes.find(x=>x.id===noteId);
+  return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">Markdown. Autosaves.</div></div>
+  <div class="chips"><span class="seg">${['all','note','journal'].map(f=>`<button class="${noteFilter===f?'on':''}" data-act="nf" data-f="${f}">${f}</button>`).join('')}</span><button class="btn" data-act="newNote" data-t="journal">+ Journal entry</button><button class="btn pri" data-act="newNote" data-t="note">+ Note</button></div></div>
+  <div class="notes">
+    <div class="nlist">${list.map(x=>`<div class="nitem ${x.id===noteId?'on':''}" data-act="openNote" data-id="${x.id}"><div class="t">${esc(x.title||'Untitled')}</div><div class="faint mono" style="font-size:11px">${x.type} · ${ago(new Date(x.updated).toISOString())}</div></div>`).join('')||'<div class="empty">Nothing here yet.</div>'}</div>
+    ${n?`<div class="editor"><div style="display:flex;gap:10px;align-items:center"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1"><span class="seg"><button class="${noteMode==='edit'?'on':''}" data-act="nm" data-m="edit">Write</button><button class="${noteMode==='view'?'on':''}" data-act="nm" data-m="view">Preview</button></span><button class="btn sm danger ghost" data-act="delNote">Delete</button></div>
+    ${noteMode==='edit'?`<textarea id="nBody" placeholder="Start writing…">${esc(n.body)}</textarea>`:`<div class="prose">${md(n.body)}</div>`}</div>`:'<div class="empty">Create a note to get started.</div>'}
+  </div>`;
+}
+after.notes=()=>{const t=$('#nTitle'),b=$('#nBody'),n=S.notes.find(x=>x.id===noteId);if(!n)return;
+  const up=()=>{n.title=t.value;if(b)n.body=b.value;n.updated=Date.now();save()};t&&(t.oninput=up);b&&(b.oninput=up)};
+function md(s){
+  const blocks=[];s=esc(s).replace(/```([\s\S]*?)```/g,(_,c)=>{blocks.push(c.replace(/^\n/,''));return `\u0000${blocks.length-1}\u0000`});
+  let html='',inList=false;
+  for(let line of s.split('\n')){
+    const il=x=>x.replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/\[(.+?)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+    if(/^[-*] /.test(line)){if(!inList){html+='<ul>';inList=true}html+=`<li>${il(line.slice(2))}</li>`;continue}
+    if(inList){html+='</ul>';inList=false}
+    const h=line.match(/^(#{1,3}) (.*)/);
+    if(h)html+=`<h${h[1].length}>${il(h[2])}</h${h[1].length}>`;
+    else if(/^\u0000\d+\u0000$/.test(line.trim()))html+=line.trim();
+    else html+=line.trim()?`<p>${il(line)}</p>`:'';
+  }
+  if(inList)html+='</ul>';
+  return html.replace(/\u0000(\d+)\u0000/g,(_,i)=>`<pre><code>${blocks[i]}</code></pre>`);
+}
+
+/* ---------------- PRESENCE ---------------- */
+function links(){
+  return `<div class="head"><div><h2>Presence</h2><div class="sub">Website, socials, profiles — one place.</div></div><button class="btn pri" data-act="addLink">+ Link</button></div>
+  <div class="g g2">
+    <div class="card"><h3>Website</h3><div style="font-size:22px;font-weight:600">${esc(S.settings.site.replace(/^https?:\/\//,''))}</div>
+      <div style="margin:8px 0 14px"><span id="siteStatus" class="status chk"><span class="dot pulse"></span>checking…</span></div>
+      <div class="chips"><a class="btn sm" href="${esc(S.settings.site)}" target="_blank" rel="noopener">Open ↗</a><button class="btn sm" data-act="recheck">↻ Recheck</button></div>
+      <div class="faint" style="font-size:13px;margin-top:12px">Hosted on GitHub Pages · domain via Namecheap</div></div>
+    <div class="card"><h3>Links</h3><div class="list">${S.links.map(l=>`<div class="li"><div class="grow"><div>${esc(l.label)}</div>${l.url?`<a href="${esc(l.url)}" target="_blank" rel="noopener" class="t mono" style="font-size:12px;display:block">${esc(l.url.replace(/^https?:\/\//,''))}</a>`:'<span class="faint mono" style="font-size:12px">not set</span>'}</div><button class="btn sm ghost" data-act="editLink" data-id="${l.id}">✎</button></div>`).join('')}</div></div>
+  </div>`;
+}
+after.links=paintSite;
+let siteState='chk';
+async function checkSite(){
+  siteState='chk';paintSite();const c=new AbortController();const t=setTimeout(()=>c.abort(),8000);
+  try{await fetch(S.settings.site,{mode:'no-cors',cache:'no-store',signal:c.signal});siteState='up'}catch(e){siteState='down'}
+  clearTimeout(t);paintSite();
+}
+function paintSite(){const el=$('#siteStatus');if(!el)return;el.className='status '+siteState;el.innerHTML=siteState==='up'?'<span class="dot pulse"></span>online':siteState==='down'?'<span class="dot"></span>unreachable':'<span class="dot pulse"></span>checking…'}
+
+/* ---------------- SETTINGS ---------------- */
+function settings(){
+  const s=S.settings;
+  return `<div class="head"><div><h2>Settings</h2><div class="sub">Your data stays in this browser. Export to back it up.</div></div><button class="btn" data-act="lock">⏻ Lock</button></div>
+  <div class="g g2">
+    <div class="card"><h3>Profile</h3>
+      <div class="field"><span class="label">Display name</span><input id="sName" value="${esc(s.name)}"></div>
+      <div class="field"><span class="label">GitHub username</span><input id="sGh" value="${esc(s.github)}" placeholder="your-username"></div>
+      <div class="field"><span class="label">Website</span><input id="sSite" value="${esc(s.site)}"></div>
+      <div class="field"><span class="label">Weekly study goal (hours)</span><input id="sGoal" type="number" min="1" value="${s.weeklyGoal}"></div>
+      <button class="btn pri" data-act="saveSettings">Save</button></div>
+    <div class="g" style="align-content:start">
+      <div class="card"><h3>Data</h3><div class="chips"><button class="btn" data-act="export">⇩ Export JSON</button><button class="btn" data-act="import">⇧ Import JSON</button><button class="btn danger" data-act="reset">Reset everything</button></div><input type="file" id="impFile" accept=".json" style="display:none"></div>
+      <div class="card"><h3>Security</h3><div class="field"><span class="label">New passphrase</span><input id="sPw" type="password"></div><button class="btn" data-act="changePw">Change passphrase</button>
+      <div class="faint" style="font-size:12px;margin-top:10px">The lock is client-side — it keeps casual visitors out, not a determined attacker. Don't store secrets here.</div></div>
+    </div>
+  </div>`;
+}
+
+/* ---------------- forms ---------------- */
+function form(title,fields,vals,onSave,onDel){
+  $('#modal').innerHTML=`<h3>${title}</h3>${fields.map(f=>{const v=esc(vals[f.k]??'');const inp=f.type==='textarea'?`<textarea name="${f.k}">${v}</textarea>`:f.type==='select'?`<select name="${f.k}">${f.opts.map(o=>{const[val,lab]=Array.isArray(o)?o:[o,o];return `<option value="${esc(val)}" ${String(vals[f.k])===String(val)?'selected':''}>${esc(lab)}</option>`}).join('')}</select>`:`<input name="${f.k}" type="${f.type||'text'}" value="${v}" ${f.type==='number'?'min="0"':''} placeholder="${esc(f.ph||'')}">`;return `<div class="field"><span class="label">${f.label}</span>${inp}</div>`}).join('')}
+  <div class="mfoot">${onDel?'<button class="btn danger ghost left" id="mDel">Delete</button>':''}<button class="btn" id="mCancel">Cancel</button><button class="btn pri" id="mSave">Save</button></div>`;
+  $('#modalWrap').classList.add('on');setTimeout(()=>$('#modal input, #modal textarea')?.focus(),30);
+  $('#mCancel').onclick=closeModal;
+  $('#mSave').onclick=()=>{const o={};fields.forEach(f=>{const el=$(`#modal [name="${f.k}"]`);o[f.k]=f.type==='number'?+el.value:el.value});onSave(o);save();closeModal();render()};
+  if(onDel)$('#mDel').onclick=()=>{if(confirm('Delete this?')){onDel();save();closeModal();render()}};
+}
+function closeModal(){$('#modalWrap').classList.remove('on')}
+const tracksList=()=>[...new Set(S.roadmap.map(r=>r.track))];
+const sessF=()=>[{k:'date',label:'Date',type:'date'},{k:'topic',label:'What did you study?',ph:'e.g. CS50X pset 2 — caesar'},{k:'track',label:'Track',type:'select',opts:[...tracksList(),'Project','Other']},{k:'minutes',label:'Minutes',type:'number'},{k:'problems',label:'Problems solved (LeetCode etc.)',type:'number'}];
+const jobF=[{k:'company',label:'Company'},{k:'role',label:'Role'},{k:'status',label:'Stage',type:'select',opts:JS},{k:'date',label:'Applied on',type:'date'},{k:'followUp',label:'Follow up on',type:'date'},{k:'link',label:'Posting URL'},{k:'notes',label:'Notes',type:'textarea'}];
+const skillF=[{k:'name',label:'Skill'},{k:'cat',label:'Category',ph:'Languages, Web, Tools…'},{k:'level',label:'Level (1–5)',type:'select',opts:[[1,'1 · Beginner'],[2,'2 · Learning'],[3,'3 · Comfortable'],[4,'4 · Strong'],[5,'5 · Expert']]},{k:'notes',label:'Evidence / notes'}];
+const projF=[{k:'name',label:'Name'},{k:'status',label:'Status',type:'select',opts:['Planning','Active','Paused','Shipped']},{k:'desc',label:'Description',type:'textarea'},{k:'next',label:'Next action'},{k:'link',label:'Link'}];
+const find=(arr,id)=>S[arr].find(x=>x.id===id);
+const del=(arr,id)=>()=>S[arr]=S[arr].filter(x=>x.id!==id);
+
+/* ---------------- actions ---------------- */
+const A={
+  go:d=>go(d.v), palette:openPal, lock,
+  track:d=>{studyTrack=d.t;render()},
+  cycle:d=>{const r=find('roadmap',d.id);r.status={todo:'doing',doing:'done',done:'todo'}[r.status];save();render()},
+  addStep:()=>form('Roadmap item',[{k:'track',label:'Track (existing or new)'},{k:'title',label:'Title'},{k:'status',label:'Status',type:'select',opts:['todo','doing','done']}],{track:studyTrack,status:'todo'},o=>{S.roadmap.push({id:uid(),...o});studyTrack=o.track}),
+  editStep:d=>{const r=find('roadmap',d.id);form('Edit item',[{k:'track',label:'Track'},{k:'title',label:'Title'},{k:'status',label:'Status',type:'select',opts:['todo','doing','done']}],r,o=>Object.assign(r,o),del('roadmap',d.id))},
+  logSession:(d,pre={})=>form('Log study session',sessF(),{date:today(),minutes:60,problems:0,track:studyTrack,...pre},o=>{S.sessions.push({id:uid(),...o});toast(`Logged ${hm(o.minutes)} 🔥`)}),
+  editSession:d=>{const s=find('sessions',d.id);form('Edit session',sessF(),s,o=>Object.assign(s,o),del('sessions',d.id))},
+  addSkill:()=>form('New skill',skillF,{level:1},o=>S.skills.push({id:uid(),...o,level:+o.level})),
+  editSkill:d=>{const s=find('skills',d.id);form('Edit skill',skillF,s,o=>Object.assign(s,o,{level:+o.level}),del('skills',d.id))},
+  addProject:()=>form('New project',projF,{status:'Planning'},o=>S.projects.push({id:uid(),...o})),
+  editProject:d=>{const p=find('projects',d.id);form('Edit project',projF,p,o=>Object.assign(p,o),del('projects',d.id))},
+  addJob:()=>form('New application',jobF,{status:'applied',date:today(),followUp:addDays(today(),7)},o=>S.jobs.push({id:uid(),...o})),
+  editJob:d=>{const j=find('jobs',d.id);form('Edit application',jobF,j,o=>Object.assign(j,o),del('jobs',d.id))},
+  mv:(d,e)=>{e.stopPropagation();const j=find('jobs',d.id),i=JS.findIndex(x=>x[0]===j.status);j.status=JS[Math.max(0,Math.min(JS.length-1,i+ +d.d))][0];save();render()},
+  addLink:()=>form('New link',[{k:'label',label:'Label'},{k:'url',label:'URL',ph:'https://'}],{},o=>S.links.push({id:uid(),...o})),
+  editLink:d=>{const l=find('links',d.id);form('Edit link',[{k:'label',label:'Label'},{k:'url',label:'URL',ph:'https://'}],l,o=>Object.assign(l,o),del('links',d.id))},
+  recheck:checkSite,
+  ghSet:()=>{const u=$('#ghU').value.trim();if(!u)return;S.settings.github=u;S.gh=null;save();render();syncGH()},
+  ghSync:()=>{toast('Syncing…');syncGH()},
+  nf:d=>{noteFilter=d.f;noteId=null;render()},
+  nm:d=>{noteMode=d.m;render()},
+  openNote:d=>{noteId=d.id;render()},
+  newNote:d=>{const j=d.t==='journal';const n={id:uid(),type:d.t,title:j?new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}):'',body:j?'## What I did today\n\n\n## What I learned\n\n\n## What blocked me\n\n\n## Tomorrow\n':'',updated:Date.now()};S.notes.push(n);noteId=n.id;noteMode='edit';save();go('notes');setTimeout(()=>(j?$('#nBody'):$('#nTitle'))?.focus(),20)},
+  delNote:()=>{if(confirm('Delete this note?')){S.notes=S.notes.filter(n=>n.id!==noteId);noteId=null;save();render()}},
+  saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github;Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite()},
+  changePw:async()=>{const v=$('#sPw').value;if(v.length<4)return toast('Min 4 characters');localStorage.setItem(HKEY,await hash(v));$('#sPw').value='';toast('Passphrase changed')},
+  export:()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download=`opuos-backup-${today()}.json`;a.click()},
+  import:()=>{const f=$('#impFile');f.onchange=()=>{const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.settings)throw 0;S=d;save();toast('Imported');render()}catch(e){toast('Invalid file')}};r.readAsText(f.files[0])};f.click()},
+  reset:()=>{if(confirm('Wipe ALL data and start fresh?')){localStorage.removeItem(KEY);load();render();toast('Reset')}},
+  timerStart:d=>startTimer(+d.m), timerStop:stopTimer, timerLog:()=>finishTimer(true),
+};
+document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;const f=A[el.dataset.act];if(f){f(el.dataset,e)}});
+$('#modalWrap').addEventListener('click',e=>{if(e.target.id==='modalWrap')closeModal()});
+
+/* ---------------- focus timer ---------------- */
+let T={run:false,end:0,mins:25,start:0,iv:null};
+function renderTimer(){
+  const el=$('#timer');el.classList.toggle('run',T.run);
+  $('#timerRow').innerHTML=T.run?`<button class="btn sm" data-act="timerStop">■ Stop</button><button class="btn sm" data-act="timerLog">✓ Log now</button>`:`<button class="btn sm" data-act="timerStart" data-m="25">25</button><button class="btn sm" data-act="timerStart" data-m="50">50</button><button class="btn sm" data-act="timerStart" data-m="90">90</button>`;
+  tick();
+}
+function tick(){const left=T.run?Math.max(0,T.end-Date.now()):T.mins*6e4;const m=Math.floor(left/6e4),s=Math.floor(left/1e3)%60;$('#timerT').textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;document.title=T.run?`${$('#timerT').textContent} · focus — OPU/OS`:'OPU/OS — Command Center';if(T.run&&left<=0)finishTimer(false)}
+function startTimer(m){T={run:true,mins:m,start:Date.now(),end:Date.now()+m*6e4,iv:setInterval(tick,500)};renderTimer();toast(`Focus ${m}m — go.`)}
+function stopTimer(){clearInterval(T.iv);T.run=false;renderTimer()}
+function finishTimer(early){
+  const mins=Math.max(1,Math.round((Date.now()-T.start)/6e4));stopTimer();
+  if(!early)try{const c=new AudioContext(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.setValueAtTime(.15,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+1.2);o.start();o.stop(c.currentTime+1.2)}catch(e){}
+  A.logSession({}, {minutes:early?mins:T.mins});
+}
+
+/* ---------------- command palette ---------------- */
+let palSel=0,palList=[];
+function cmds(){
+  return [
+    ...[['dash','Dashboard'],['study','Study'],['skills','Skills'],['projects','Projects'],['career','Career'],['github','GitHub'],['notes','Notes & Journal'],['links','Presence'],['settings','Settings']].map(([v,l])=>({l:'Go to '+l,k:'nav',f:()=>go(v)})),
+    {l:'Start focus · 25 min',k:'timer',f:()=>startTimer(25)},{l:'Start focus · 50 min',k:'timer',f:()=>startTimer(50)},
+    {l:'Log study session',k:'study',f:()=>A.logSession({})},{l:'New application',k:'career',f:A.addJob},
+    {l:'New note',k:'notes',f:()=>A.newNote({t:'note'})},{l:"Today's journal entry",k:'notes',f:()=>A.newNote({t:'journal'})},
+    {l:'Sync GitHub',k:'github',f:()=>syncGH()},{l:'Export backup',k:'data',f:A.export},{l:'Lock',k:'system',f:lock},
+    ...S.notes.map(n=>({l:n.title||'Untitled',k:n.type,f:()=>{noteId=n.id;go('notes')}})),
+    ...S.jobs.map(j=>({l:`${j.company} — ${j.role}`,k:'job',f:()=>A.editJob({id:j.id})})),
+    ...S.projects.map(p=>({l:p.name,k:'project',f:()=>A.editProject({id:p.id})})),
+  ];
+}
+function openPal(){$('#palWrap').classList.add('on');$('#palInput').value='';palSel=0;drawPal();$('#palInput').focus()}
+function closePal(){$('#palWrap').classList.remove('on')}
+function drawPal(){const q=$('#palInput').value.toLowerCase();palList=cmds().filter(c=>c.l.toLowerCase().includes(q)).slice(0,12);palSel=Math.min(palSel,Math.max(0,palList.length-1));$('#palItems').innerHTML=palList.map((c,i)=>`<div class="it ${i===palSel?'on':''}" data-i="${i}"><span>${esc(c.l)}</span><span>${c.k}</span></div>`).join('')||'<div class="empty" style="padding:12px">No matches</div>'}
+$('#palInput').oninput=()=>{palSel=0;drawPal()};
+$('#palItems').onclick=e=>{const it=e.target.closest('.it');if(it){closePal();palList[+it.dataset.i].f()}};
+$('#palWrap').addEventListener('click',e=>{if(e.target.id==='palWrap')closePal()});
+
+document.addEventListener('keydown',e=>{
+  if(!$('#app').classList.contains('on'))return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#palWrap').classList.contains('on')?closePal():openPal();return}
+  if($('#palWrap').classList.contains('on')){
+    if(e.key==='Escape')closePal();
+    else if(e.key==='ArrowDown'){palSel=Math.min(palSel+1,palList.length-1);drawPal();e.preventDefault()}
+    else if(e.key==='ArrowUp'){palSel=Math.max(palSel-1,0);drawPal();e.preventDefault()}
+    else if(e.key==='Enter'&&palList[palSel]){closePal();palList[palSel].f()}
+    return;
+  }
+  if(e.key==='Escape')closeModal();
+  const tag=document.activeElement.tagName;if(['INPUT','TEXTAREA','SELECT'].includes(tag)||$('#modalWrap').classList.contains('on'))return;
+  const v=['dash','study','skills','projects','career','github','notes','links','settings'][+e.key-1];if(v)go(v);
+});
+window.addEventListener('hashchange',()=>{const v=location.hash.slice(1);if(v!==view&&views[v])go(v)});
+
+initLock();
+</script>
+</body>
+</html>
