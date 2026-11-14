@@ -286,7 +286,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
   .head>.chips,.hero>.chips{width:100%}
   .seg{max-width:100%;overflow-x:auto;scrollbar-width:none}.seg::-webkit-scrollbar{display:none}.seg button{white-space:nowrap;flex:none}
   .g2,.g3{grid-template-columns:minmax(0,1fr)}.g4{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .span2,.span3{grid-column:1/-1}
+  .span2,.span3,.g4>.card:not(.stat){grid-column:1/-1} /* only small stat tiles share a row */
   .card{overflow-x:auto;padding:14px}
   .stat .v{font-size:24px}.stat .v small{font-size:13px}
   td,th{padding:8px 6px}td{font-size:13px}
