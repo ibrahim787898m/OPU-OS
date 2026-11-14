@@ -378,7 +378,7 @@ function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){} if(!S)S=s
 /* Upgrades older saved data in place — never wipes anything. */
 function migrate(){
   S.settings.noteRepos??=['math','dsa','cs50x'];
-  S.plans??=[];S.leetcode??=[];S.lcRound??=today();
+  S.plans??=[];S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
   S.notes.forEach(n=>{n.tags??=[];n.subject??='';n.topic??='';if(n.type==='journal')n.date??=dstr(new Date(n.updated||Date.now()))});
 }
 function save(){S._t=Date.now();localStorage.setItem(KEY,JSON.stringify(S));schedulePush()}
@@ -518,7 +518,7 @@ function dash(){
     <div class="card stat clickable" data-act="studyTab" data-t="leetcode"><div class="label">LeetCode solved</div><div class="v">${S.leetcode.length||solved()}</div><div class="k faint mono" style="font-size:12px">${S.leetcode.length?`revised ${lcRevised()}/${S.leetcode.length} this round`:`DSA roadmap ${pct('DSA')}%`}</div></div>
 
     <div class="card stat"><div class="label">Active applications</div><div class="v">${active}</div><div class="k faint mono" style="font-size:12px">${S.jobs.filter(j=>j.status==='interview').length} interviewing</div></div>
-    <div class="card" style="grid-column:1/-1"><h3><span>Today${p?` · ${esc(p.title||'Week of '+fmtDate(p.week))}`:''}</span><button class="btn sm ghost" data-act="studyTab" data-t="week">Weekly plan →</button></h3>
+    <div class="card" style="grid-column:1/-1"><h3><span>Today${p?` · ${esc(p.title||'Week of '+fmtDate(p.week))}`:''}</span><span class="chips">${reviewQueue().show.length?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().show.length} review${reviewQueue().show.length===1?'':'s'} due →</button>`:''}<button class="btn sm ghost" data-act="studyTab" data-t="week">Weekly plan →</button></span></h3>
       ${td?`<div style="display:flex;gap:12px;align-items:flex-start"><button class="ck ${td.d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${td.i}">✓</button><div><div><strong>${esc(td.d.day)}</strong> <span class="pill" style="margin-left:6px">${esc(td.d.focus||'—')}</span></div><div style="margin-top:6px">${inl(esc(td.d.plan))}</div></div></div>`
       :p?`<div class="empty">Nothing planned for today in this week's plan.</div>`:`<div class="empty">No weekly plan yet. <button class="btn sm" data-act="pastePlan">+ Add weekly plan</button></div>`}
     </div>
@@ -540,7 +540,7 @@ function dash(){
     </div>
   </div>`;
 }
-after.dash=()=>{drawHeat();drawBars();paintSite()};
+after.dash=()=>{drawHeat();drawBars();paintSite();ghLoadAll()};
 
 function drawHeat(){
   const m=minsByDay(),W=30,cell=13,gap=3,end=new Date();end.setDate(end.getDate()+(6-end.getDay()));
@@ -566,22 +566,25 @@ let studyTrack=null,studyTab='week',planId=null,lcF='all';
 const stepSort=(a,b)=>(a.step??1e9)-(b.step??1e9);
 const nextUp=()=>S.roadmap.filter(r=>r.status!=='done'&&r.step!=null&&r.step<100).sort(stepSort)[0];
 function study(){
-  const tabs=[['week','This week'],['roadmap','Roadmap'],['leetcode','LeetCode'],['sessions','Sessions']];
+  const rq=reviewQueue().show.length,tabs=[['week','This week'],['review','Review'+(rq?` <span class="mono" style="color:var(--amber)">${rq}</span>`:'')],['quizzes','Quizzes'],['roadmap','Roadmap'],['leetcode','LeetCode'],['sessions','Sessions']];
   const btns={week:`<button class="btn pri" data-act="pastePlan">+ Add weekly plan</button>`,
     roadmap:`<button class="btn" data-act="addStep">+ Roadmap item</button>`,
+    review:`<button class="btn pri" data-act="rvAdd">+ Review item</button>`,
+    quizzes:`<button class="btn" data-act="ghNotes">↻ Re-read GitHub</button>`,
     leetcode:`<button class="btn" data-act="lcRound">↻ New revision round</button><button class="btn pri" data-act="lcAdd">+ Problem</button>`,
     sessions:`<button class="btn pri" data-act="logSession">+ Log session</button>`}[studyTab];
   return `<div class="head"><div><h2>Study</h2><div class="sub">Weekly plan, roadmap, LeetCode revision and sessions.</div></div>
   <div class="chips"><span class="seg">${tabs.map(([k,l])=>`<button class="${studyTab===k?'on':''}" data-act="studyTab" data-t="${k}">${l}</button>`).join('')}</span>${btns}</div></div>
-  ${{week:studyWeek,roadmap:studyRoadmap,leetcode:studyLC,sessions:studySessions}[studyTab]()}`;
+  ${{week:studyWeek,review:studyReview,quizzes:studyQuizzes,roadmap:studyRoadmap,leetcode:studyLC,sessions:studySessions}[studyTab]()}`;
 }
 
 /* ----- roadmap ----- */
 function studyRoadmap(){
   const tracks=tracksList().sort((a,b)=>S.roadmap.filter(r=>r.track===b).length-S.roadmap.filter(r=>r.track===a).length);
   if(!studyTrack||!tracks.includes(studyTrack))studyTrack=tracks.includes(nextUp()?.track)?nextUp().track:tracks[0];
-  const items=S.roadmap.filter(r=>r.track===studyTrack).sort(stepSort),nx=nextUp();
-  return `${nx?`<div class="banner"><span><span class="label" style="margin-right:8px">Next up</span><strong>Step ${nx.step}</strong> · ${esc(nx.title)} <span class="faint">(${esc(nx.track)})</span></span>${nx.url?`<a class="btn sm" href="${esc(nx.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}</div>`:''}
+  const items=S.roadmap.filter(r=>r.track===studyTrack).sort(stepSort),nx=nextUp(),sug=roadmapSuggestions();
+  return `${sug.length?`<div class="card" style="margin-bottom:16px"><h3>From your repos</h3><div class="list">${sug.map(x=>`<div class="li"><div class="grow"><div>${x.r.step!=null?`<b>Step ${x.r.step}</b> · `:''}${esc(x.r.title)} <span class="pill">todo</span></div><div class="faint mono" style="font-size:11px">notes found in ${esc(x.k)} · ${x.v.lesson} lesson, ${x.v.quiz} quiz file${x.v.quiz===1?'':'s'}</div></div><button class="btn sm pri" data-act="sugDo" data-id="${x.r.id}">Mark doing</button><button class="btn sm ghost" data-act="sugNo" data-id="${x.r.id}" data-k="${esc(x.k)}">Dismiss</button></div>`).join('')}</div></div>`:''}
+  ${nx?`<div class="banner"><span><span class="label" style="margin-right:8px">Next up</span><strong>Step ${nx.step}</strong> · ${esc(nx.title)} <span class="faint">(${esc(nx.track)})</span></span>${nx.url?`<a class="btn sm" href="${esc(nx.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}</div>`:''}
   <div class="card"><h3><span class="seg" style="flex-wrap:wrap">${tracks.map(t=>`<button class="${t===studyTrack?'on':''}" data-act="track" data-t="${esc(t)}">${esc(t)} <span class="faint">${pct(t)}%</span></button>`).join('')}</span></h3>
     <div class="meter" style="margin:-4px 0 14px"><i style="width:${pct(studyTrack)}%"></i></div>
     <div class="track">${items.map((r,i)=>`<div class="step ${r.status}"><span class="n">${r.step!=null?r.step:'·'}</span><span class="title">${esc(r.title)}${r.notes?`<div class="faint" style="font-size:12px">${esc(r.notes)}</div>`:''}</span>
@@ -664,8 +667,14 @@ function studyWeek(){
   if(!p)return `<div class="card" style="max-width:640px"><h3>No weekly plan yet</h3><p class="muted" style="margin-bottom:14px">Each Sunday, open the new <b>Week of …</b> page in Notion, press <b>Ctrl+A</b> then <b>Ctrl+C</b>, and paste it here. The day-by-day table becomes a checklist.</p><button class="btn pri" data-act="pastePlan">+ Add weekly plan</button></div>`;
   const ws=weekStart(),nextP=S.plans.find(x=>x.week===addDays(ws,7)),isCur=p.week===ws;
   const dd=p.days.filter(d=>d.done).length,od=p.outcomes.filter(o=>o.done).length;
-  const hist=[...S.plans].sort((a,b)=>b.week.localeCompare(a.week));
-  return `${nextP&&nextP.id!==p.id?`<div class="banner"><span>📅 Next week's plan is ready: <strong>${esc(nextP.title)}</strong></span><button class="btn sm" data-act="openPlan" data-id="${nextP.id}">View →</button></div>`:''}
+  const hist=[...S.plans].sort((a,b)=>b.week.localeCompare(a.week)),we=addDays(p.week,6);
+  const mins=S.sessions.filter(x=>x.date>=p.week&&x.date<=we).reduce((a,x)=>a+(+x.minutes||0),0),lcw=S.leetcode.filter(x=>x.last&&x.last>=p.week&&x.last<=we).length;
+  const strip=`<div class="g g4" style="margin-bottom:16px">
+    <div class="card stat"><div class="label">Study time</div><div class="v">${hm(mins)}</div><div class="faint mono" style="font-size:11px;margin-top:6px">logged sessions this week</div></div>
+    <div class="card stat"><div class="label">Plan</div><div class="v">${dd}<small>/${p.days.length} days</small></div><div class="faint mono" style="font-size:11px;margin-top:6px">${od}/${p.outcomes.length} outcomes</div></div>
+    <div class="card stat clickable" data-act="studyTab" data-t="leetcode"><div class="label">LeetCode revised</div><div class="v">${lcw}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${lcRevised()}/${S.leetcode.length} this round</div></div>
+    <div class="card stat clickable" data-act="studyTab" data-t="review"><div class="label">Reviews done</div><div class="v">${reviewsBetween(p.week,we)}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${reviewQueue().show.length} due now</div></div></div>`;
+  return `${strip}${nextP&&nextP.id!==p.id?`<div class="banner"><span>📅 Next week's plan is ready: <strong>${esc(nextP.title)}</strong></span><button class="btn sm" data-act="openPlan" data-id="${nextP.id}">View →</button></div>`:''}
   ${!isCur&&p.week<ws&&!nextP?`<div class="banner" style="border-color:rgba(255,198,92,.35);background:rgba(255,198,92,.08)"><span>No plan for this week yet — showing the latest one.</span><button class="btn sm" data-act="pastePlan">+ Add this week's plan</button></div>`:''}
   <div class="g g3">
     <div class="card span2"><h3><span>${esc(p.title)}${isCur?' <span class="pill done" style="margin-left:6px">this week</span>':''}</span>
@@ -687,6 +696,8 @@ function studyWeek(){
   </div>`;
 }
 after.study=()=>{
+  if(['review','quizzes','roadmap'].includes(studyTab)){if(!ghIdx)loadGhNotes();else ghLoadAll()}
+  const np=$('#npd');if(np)np.onchange=()=>{S.settings.newPerDay=+np.value;save();render()};
   const sel=$('#planSel');if(sel)sel.onchange=()=>{planId=sel.value;render()};
   const p=curPlan();if(!p)return;
   document.querySelectorAll('[data-rv]').forEach(t=>t.oninput=()=>{p.review[+t.dataset.rv].a=t.value;save()});
@@ -765,6 +776,126 @@ function studyLC(){
   <div class="faint mono" style="font-size:11px;margin-top:10px">✓ = revised in this round (adds 1 to “practiced”). Click a status to cycle Solved → Revisit → Mastered.</div></div>`;
 }
 const lcF_=[{k:'num',label:'Problem number',type:'number'},{k:'name',label:'Name'},{k:'difficulty',label:'Difficulty',type:'select',opts:['Easy','Medium','Hard']},{k:'pattern',label:'Pattern',ph:'Two Pointer, Hashing…'},{k:'status',label:'Status',type:'select',opts:LCS},{k:'insight',label:'Key insight',type:'textarea'},{k:'link',label:'Solution link'}];
+
+
+/* ----- quizzes: scores read from the quiz files' "First attempt: x/10" header ----- */
+function parseQuiz(t){
+  const num=s=>+s;
+  const fa=t.match(/first attempt:\s*([\d.]+)\s*\/\s*([\d.]+)/i),rd=t.match(/redo[^:\n]*:\s*([\d.]+)\s*\/\s*([\d.]+)/i);
+  const head=t.split('\n').slice(0,14).join('\n');
+  const cl=head.split('\n').filter(l=>/corrected/i.test(l)&&!/first attempt and the corrected/i.test(l)).join(' ');
+  const corrected=[...new Set(cl.match(/Q\d+(?:\([a-z]\))?/g)||[])];
+  // Question text: math quizzes put it in the heading ("## Q3. Simplify…", "### (b) …");
+  // DSA quizzes put it in a bold line under "## Q3". Code blocks are skipped.
+  const prompts={},body={};let q=null,part=null,fence=false;
+  for(const l of t.split('\n')){
+    if(/^\s*```/.test(l)){fence=!fence;continue}if(fence)continue;
+    let m=l.match(/^##\s+Q(\d+)\b\.?\s*(?:\([^)]*\))?\s*(.*)$/);
+    if(m){q=m[1];part=null;if(m[2].trim())prompts[q]=m[2].trim();body[q]=[];continue}
+    m=l.match(/^###\s+\(([a-z])\)\s*(.*)$/);
+    if(m&&q){part=`${q}(${m[1]})`;if(m[2].trim())prompts[part]=m[2].trim();continue}
+    if(/^#{1,2}\s/.test(l)){q=null;continue}
+    if(q&&l.trim()&&body[q].length<10&&!/^#/.test(l))body[q].push(l.trim());
+  }
+  for(const [k,ls] of Object.entries(body))if(!prompts[k]){const b=ls.find(l=>/^\*\*/.test(l));if(b)prompts[k]=b}
+  for(const k in prompts)prompts[k]=prompts[k].replace(/\*\*/g,'').slice(0,240);
+  return {score:fa?num(fa[1]):null,outOf:fa?num(fa[2]):null,redo:rd?num(rd[1]):null,corrected,prompts};
+}
+function quizList(){
+  return (ghIdx?.items||[]).filter(n=>n.type==='quiz').map(n=>{
+    const t=ghBody[n.sha],q=t!=null?parseQuiz(t):{score:null,outOf:null,corrected:[],prompts:{}},m=S.quizManual?.[n.id];
+    const score=q.score??(m?+m.score:null),outOf=q.outOf??(m?+m.outOf||10:null);
+    return {n,loaded:t!=null,manual:q.score==null&&!!m,score,outOf,pctv:score!=null&&outOf?Math.round(score/outOf*100):null,redo:q.redo,corrected:q.score!=null?q.corrected:(m?.corrected||'').match(/Q\d+(?:\([a-z]\))?/g)||[],prompts:q.prompts};
+  }).sort((a,b)=>a.n.subject.localeCompare(b.n.subject)||a.n.tkey.localeCompare(b.n.tkey,undefined,{numeric:true})||a.n.title.localeCompare(b.n.title,undefined,{numeric:true}));
+}
+const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null;
+const pctColor=p=>p==null?'var(--faint)':p>=90?'var(--acc)':p>=75?'var(--amber)':'var(--red)';
+function studyQuizzes(){
+  if(!ghIdx)return `<div class="empty">Loading your GitHub notes…</div>`;
+  const Q=quizList(),scored=Q.filter(q=>q.pctv!=null),loading=Q.some(q=>!q.loaded);
+  const groups={};Q.forEach(q=>(groups[q.n.subject+' · '+q.n.topic]??=[]).push(q));
+  const tops=Object.entries(groups).map(([k,a])=>[k,avg(a.filter(q=>q.pctv!=null).map(q=>q.pctv))]).filter(x=>x[1]!=null).sort((a,b)=>a[1]-b[1]);
+  return `<div class="g g4" style="margin-bottom:16px">
+    <div class="card stat"><div class="label">Quizzes</div><div class="v">${Q.length}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${scored.length} with a score</div></div>
+    <div class="card stat"><div class="label">Avg first attempt</div><div class="v" style="color:${pctColor(avg(scored.map(q=>q.pctv)))}">${avg(scored.map(q=>q.pctv))??'—'}<small>%</small></div></div>
+    <div class="card stat"><div class="label">Questions corrected</div><div class="v">${Q.reduce((a,q)=>a+q.corrected.length,0)}</div><div class="faint mono" style="font-size:11px;margin-top:6px">feed the review queue</div></div>
+    <div class="card stat"><div class="label">Weakest topic</div><div style="font-size:16px;font-weight:600;margin-top:6px">${tops[0]?esc(tops[0][0].split(' · ')[1]):'—'}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${tops[0]?tops[0][1]+'% avg':''}</div></div>
+  </div>
+  ${loading?`<div class="faint mono pulse" style="font-size:12px;margin-bottom:10px">reading quiz files from GitHub…</div>`:''}
+  ${Object.entries(groups).sort((x,y)=>(y[1].some(q=>q.pctv!=null)?1:0)-(x[1].some(q=>q.pctv!=null)?1:0)).map(([k,a])=>{const av=avg(a.filter(q=>q.pctv!=null).map(q=>q.pctv));return `<div class="card" style="margin-bottom:14px"><h3><span>${esc(k)}</span><span class="mono" style="text-transform:none;letter-spacing:0;color:${pctColor(av)}">${av!=null?av+'% avg':'no scores yet'}</span></h3>
+    <table><tr><th>Lesson</th><th style="width:40%">First attempt</th><th>Redo</th><th>Corrected</th><th></th></tr>
+    ${a.map(q=>`<tr><td>${esc(q.n.title.replace('Quiz · ',''))}</td>
+      <td>${q.pctv!=null?`<div style="display:flex;align-items:center;gap:10px"><div class="meter" style="flex:1;margin:0"><i style="width:${q.pctv}%;background:${pctColor(q.pctv)}"></i></div><span class="mono" style="font-size:12px;min-width:52px">${q.score}/${q.outOf}</span></div>${q.manual?'<span class="faint mono" style="font-size:10px">entered by you</span>':''}`:`<span class="faint mono" style="font-size:12px">${q.loaded?'no score in file':'…'}</span>`}</td>
+      <td class="mono muted" style="font-size:12px">${q.redo!=null?q.redo+'/'+q.outOf:''}</td>
+      <td class="mono" style="font-size:12px">${q.corrected.join(', ')||'<span class="faint">—</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">${q.loaded&&parseQuizScoreMissing(q)?`<button class="btn sm ghost" data-act="quizScore" data-id="${esc(q.n.id)}" title="Enter score">✎</button>`:''}<button class="btn sm ghost" data-act="openGhNote" data-id="${esc(q.n.id)}">Open</button></td></tr>`).join('')}</table></div>`}).join('')}
+  <div class="faint" style="font-size:12px">Scores come from the <code>- First attempt: 9/10</code> line at the top of each quiz file. Quizzes without that line can be scored here with ✎ (saved in OPU/OS only).</div>`;
+}
+const parseQuizScoreMissing=q=>q.manual||q.pctv==null;
+
+/* ----- review queue: spaced repetition over corrected quiz questions, LeetCode mistakes and your own items ----- */
+const IVL=[1,3,7,14,30,60];
+function reviewItems(){
+  const out=[];
+  quizList().forEach(q=>q.corrected.forEach(lbl=>out.push({key:`q:${q.n.repo}/${q.n.path}#${lbl}`,kind:'quiz',label:`${q.n.topic} · ${q.n.title.replace('Quiz · ','')} · ${lbl}`,sub:q.n.subject,detail:(()=>{const n=lbl.match(/\d+/)[0],par=q.prompts[n]||'';return lbl.includes('(')&&q.prompts[lbl.replace(/^Q/,'')]?(par?par+' — ':'')+lbl.slice(-3)+' '+q.prompts[lbl.replace(/^Q/,'')]:par})(),note:q.n.id})));
+  S.leetcode.filter(p=>p.mistake||p.status==='Revisit').sort((a,b)=>a.num-b.num).forEach(p=>out.push({key:'lc:'+p.num,kind:'leetcode',label:`LC ${p.num} · ${p.name}`,sub:p.pattern,detail:p.insight,url:`https://leetcode.com/problems/${lcSlug(p.name)}/`,lc:p.id}));
+  (S.reviewItems||[]).forEach(r=>out.push({key:'m:'+r.id,kind:'own',label:r.label,sub:'',detail:r.detail||'',url:r.link||'',mid:r.id}));
+  return out.filter(i=>!(S.review[i.key]?.step>=99));
+}
+function reviewQueue(){
+  const all=reviewItems(),t=today(),newToday=S.reviewNew?.date===t?S.reviewNew.n:0,cap=+S.settings.newPerDay||5;
+  const due=all.filter(i=>S.review[i.key]&&S.review[i.key].due<=t).sort((a,b)=>S.review[a.key].due.localeCompare(S.review[b.key].due));
+  const fresh=all.filter(i=>!S.review[i.key]);
+  return {all,due,fresh,newLeft:Math.max(0,cap-newToday),show:[...due,...fresh.slice(0,Math.max(0,cap-newToday))]};
+}
+const reviewsBetween=(a,b)=>(S.reviewLog||[]).filter(x=>x.date>=a&&x.date<=b).length;
+function studyReview(){
+  const R=reviewQueue(),wk=reviewsBetween(weekStart(),addDays(weekStart(),6));
+  const qLoading=ghIdx&&quizList().some(q=>!q.loaded);
+  const upcoming=R.all.filter(i=>S.review[i.key]&&S.review[i.key].due>today()).length;
+  return `<div class="g g4" style="margin-bottom:16px">
+    <div class="card stat"><div class="label">Due now</div><div class="v" style="color:${R.show.length?'var(--amber)':'var(--acc)'}">${R.show.length}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${R.due.length} scheduled · ${Math.min(R.newLeft,R.fresh.length)} new</div></div>
+    <div class="card stat"><div class="label">Not started yet</div><div class="v">${Math.max(0,R.fresh.length-R.newLeft)}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${+S.settings.newPerDay||5} new per day</div></div>
+    <div class="card stat"><div class="label">Scheduled later</div><div class="v">${upcoming}</div></div>
+    <div class="card stat"><div class="label">Reviewed this week</div><div class="v">${wk}</div></div>
+  </div>
+  ${qLoading?`<div class="faint mono pulse" style="font-size:12px;margin-bottom:10px">reading quiz files from GitHub…</div>`:''}
+  <div class="card"><h3><span>Today's reviews</span><span class="chips"><select class="btn sm" id="npd" title="New items per day">${[3,5,8,10,15].map(n=>`<option value="${n}" ${(+S.settings.newPerDay||5)===n?'selected':''}>${n} new/day</option>`).join('')}</select></span></h3>
+  ${R.show.length?`<div class="list">${R.show.map(i=>{const st=S.review[i.key],nx=IVL[Math.min((st?.step??-1)+1,IVL.length-1)];return `<div class="li" style="align-items:flex-start;flex-wrap:wrap">
+    <span class="ty ${i.kind==='quiz'?'ty-quiz':i.kind==='leetcode'?'ty-practice':''}" style="margin-top:3px">${i.kind}</span>
+    <div class="grow" style="min-width:220px"><div style="font-weight:600">${esc(i.label)}</div>${i.sub?`<div class="faint mono" style="font-size:11px">${esc(i.sub)}${st?' · interval '+IVL[Math.min(st.step,IVL.length-1)]+'d':' · new'}</div>`:''}${i.detail?`<div class="muted" style="font-size:13.5px;margin-top:4px">${inl(esc(i.detail))}</div>`:''}</div>
+    <div class="chips">${i.note?`<button class="btn sm" data-act="openGhNote" data-id="${esc(i.note)}">Open quiz</button>`:i.url?`<a class="btn sm" href="${esc(i.url)}" target="_blank" rel="noopener">Open ↗</a>`:''}
+      <button class="btn sm danger" data-act="rvAns" data-k="${esc(i.key)}" data-ok="0" title="Didn't remember — see it again tomorrow">Again</button>
+      <button class="btn sm pri" data-act="rvAns" data-k="${esc(i.key)}" data-ok="1" title="Remembered it">Got it · ${nx}d</button>
+      <button class="btn sm ghost" data-act="rvRetire" data-k="${esc(i.key)}" title="Know it for good — remove from queue">Retire</button></div></div>`}).join('')}</div>`
+  :`<div class="empty">Nothing due — nice. ${upcoming?`Next review ${fmtDate(R.all.filter(i=>S.review[i.key]).map(i=>S.review[i.key].due).sort()[0])}.`:''}</div>`}
+  <div class="faint" style="font-size:12px;margin-top:12px">Comes from: questions listed as <b>corrected</b> in your quiz files, LeetCode problems marked <b>mistake</b> or <b>Revisit</b>, and items you add. “Got it” pushes the next review out (1 → 3 → 7 → 14 → 30 → 60 days); “Again” brings it back tomorrow.</div></div>`;
+}
+function answerReview(key,ok){
+  const t=today(),st=S.review[key];
+  if(!st){if(S.reviewNew?.date!==t)S.reviewNew={date:t,n:0};S.reviewNew.n++}
+  const step=ok?(st?Math.min(st.step+1,IVL.length-1):0):0;
+  S.review[key]={step,due:addDays(t,ok?IVL[step]:1),last:t};
+  (S.reviewLog??=[]).push({date:t,key,ok:!!ok});if(S.reviewLog.length>1000)S.reviewLog=S.reviewLog.slice(-1000);
+  if(ok&&key.startsWith('lc:')){const p=S.leetcode.find(x=>'lc:'+x.num===key);if(p&&!(p.last>=S.lcRound)){p.prev=p.last||'';p.last=t;p.count=(p.count||0)+1}}
+}
+
+/* ----- roadmap suggestions from repo folders ----- */
+const STOP=new Set(['and','the','of','to','a','an','in','intro','concept','technique','basics','notes','analysis','vs']);
+const toks=s=>new Set(s.toLowerCase().replace(/[&·—–,()/:+-]/g,' ').split(/\s+/).filter(w=>w&&!STOP.has(w)).map(w=>w.length>3?w.replace(/s$/,''):w));
+function roadmapSuggestions(){
+  if(!ghIdx)return [];
+  const topics={};ghIdx.items.filter(n=>n.type==='lesson'||n.type==='quiz').forEach(n=>{const k=n.repo+'/'+n.tkey;(topics[k]??={n,quiz:0,lesson:0})[n.type]++});
+  const out=[];
+  S.roadmap.filter(r=>r.status==='todo').forEach(r=>{
+    const rt=toks(r.title);
+    for(const [k,v] of Object.entries(topics)){
+      const tt=toks(v.n.topic),shared=[...rt].filter(w=>tt.has(w)).length,small=Math.min(rt.size,tt.size);
+      if(shared&&shared===small){if(!S.sugDismiss?.[r.id+'|'+k])out.push({r,k,v});break}
+    }
+  });
+  return out;
+}
 
 /* ---------------- SKILLS ---------------- */
 function skills(){
@@ -875,7 +1006,7 @@ async function loadGhNotes(force){
     }
     ghIdx={sig,at:Date.now(),items};ghAllP=null;localStorage.setItem(GHN,JSON.stringify(ghIdx));
   }catch(e){ghErr=e.message}
-  ghBusy=false;if(view==='notes')render();
+  ghBusy=false;if(view==='notes'||view==='study')render();
 }
 async function ghText(n){
   if(ghBody[n.sha]!=null)return ghBody[n.sha];
@@ -883,7 +1014,7 @@ async function ghText(n){
   if(!r.ok)throw new Error('Could not load this file ('+r.status+')');
   return ghBody[n.sha]=await r.text();
 }
-const ghLoadAll=()=>ghAllP||=Promise.all((ghIdx?.items||[]).map(n=>ghText(n).catch(()=>''))).then(()=>{if(view==='notes')render()});
+const ghLoadAll=()=>ghIdx?(ghAllP||=Promise.all(ghIdx.items.map(n=>ghText(n).catch(()=>''))).then(()=>{if(['notes','study','dash'].includes(view))render()})):Promise.resolve();
 
 /* ---------------- NOTES & JOURNAL ---------------- */
 let noteId=null,noteMode='edit',nView='notes',nSrc='all',nSubj='',nTopic='',nType='all',nQ='',nSort='topic',jId=null,jQ='';
@@ -1118,6 +1249,13 @@ const A={
   pOut:d=>{const o=S.plans.find(x=>x.id===d.p).outcomes[+d.i];o.done=!o.done;save();render()},
   reviewToJournal:d=>{const p=S.plans.find(x=>x.id===d.id);const n={id:uid(),type:'journal',kind:'review',date:today(),title:'Weekly review — '+p.title,body:p.review.map(r=>`## ${r.q}\n\n${r.a}\n`).join('\n'),tags:[],subject:'',topic:'',updated:Date.now()};S.notes.push(n);jId=n.id;nView='journal';noteMode='view';save();go('notes');toast('Saved to journal')},
   lcF:d=>{lcF=d.f;render()},
+  rvAns:d=>{answerReview(d.k,d.ok==='1');save();render()},
+  rvRetire:d=>{if(confirm('Retire this item? It leaves the review queue for good.')){S.review[d.k]={step:99,due:'9999-12-31',last:today()};save();render()}},
+  rvAdd:()=>form('Add review item',[{k:'label',label:'What to review',ph:'e.g. Contrapositive vs converse'},{k:'detail',label:'Prompt / hint',type:'textarea'},{k:'link',label:'Link (optional)'}],{},o=>S.reviewItems.push({id:uid(),...o})),
+  quizScore:d=>{const m=S.quizManual[d.id]||{outOf:10};form('Quiz score',[{k:'score',label:'First attempt score',ph:'e.g. 8.5'},{k:'outOf',label:'Out of',ph:'10'},{k:'corrected',label:'Corrected questions',ph:'e.g. Q2, Q4(b)'}],m,o=>{if(o.score===''){delete S.quizManual[d.id];return}S.quizManual[d.id]={score:+o.score,outOf:+o.outOf||10,corrected:o.corrected}})},
+  openGhNote:d=>{const n=ghIdx?.items.find(x=>x.id===d.id);if(!n)return;noteId=n.id;nView='notes';nSubj=n.subject;nTopic=n.topic;nType='all';nSrc='all';nQ='';go('notes')},
+  sugDo:d=>{const r=find('roadmap',d.id);r.status='doing';save();render();toast(`Marked doing: ${r.title}`)},
+  sugNo:d=>{S.sugDismiss[d.id+'|'+d.k]=1;save();render()},
   lcRev:d=>{const p=find('leetcode',d.id);if(p.last>=S.lcRound){p.count=Math.max(0,(p.count||1)-1);p.last=p.prev||'';delete p.prev}else{p.prev=p.last||'';p.last=today();p.count=(p.count||0)+1}save();render()},
   lcStat:d=>{const p=find('leetcode',d.id);p.status=LCS[(LCS.indexOf(p.status)+1)%LCS.length];save();render()},
   lcAdd:()=>form('Add LeetCode problem',lcF_,{difficulty:'Easy',status:'Solved'},o=>S.leetcode.push({id:uid(),...o,num:+o.num,count:1,last:today(),mistake:false})),
@@ -1140,7 +1278,7 @@ const A={
     const rv=d.k==='review',p=curPlan();
     const n={id:uid(),type:'journal',kind:rv?'review':'daily',date:today(),tags:[],subject:'',topic:'',updated:Date.now(),
       title:rv?'Weekly review — week of '+fmtLong(weekStart()):new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'}),
-      body:rv?`## Wins this week\n\n\n## What didn't go to plan\n\n\n## Topics that need relearning\n\n\n## Numbers\n\n- Study time: ${hm(weekMinutes())}\n- Plan days done: ${p?p.days.filter(x=>x.done).length+'/'+p.days.length:'—'}\n- LeetCode revised this round: ${lcRevised()}/${S.leetcode.length}\n\n## Next week's focus\n`
+      body:rv?`## Wins this week\n\n\n## What didn't go to plan\n\n\n## Topics that need relearning\n\n\n## Numbers\n\n- Study time: ${hm(weekMinutes())}\n- Plan days done: ${p?p.days.filter(x=>x.done).length+'/'+p.days.length:'—'}\n- LeetCode revised this round: ${lcRevised()}/${S.leetcode.length}\n- Reviews done: ${reviewsBetween(weekStart(),addDays(weekStart(),6))}\n\n## Next week's focus\n`
         :'## What I did today\n\n\n## What I learned\n\n\n## What blocked me\n\n\n## Tomorrow\n'};
     S.notes.push(n);jId=n.id;nView='journal';noteMode='edit';save();go('notes');setTimeout(()=>$('#nBody')?.focus(),20)},
   openJ:d=>{jId=d.id;render()},
@@ -1189,7 +1327,7 @@ function cmds(){
     {l:'New note',k:'notes',f:()=>A.newNote({})},{l:"Today's journal entry",k:'journal',f:()=>A.newJournal({k:'daily'})},
     {l:'Sync GitHub',k:'github',f:()=>syncGH()},
     {l:"This week's plan",k:'study',f:()=>A.studyTab({t:'week'})},{l:'Add weekly plan',k:'study',f:pastePlanModal},{l:'LeetCode revision',k:'study',f:()=>A.studyTab({t:'leetcode'})},{l:'Roadmap',k:'study',f:()=>A.studyTab({t:'roadmap'})},
-    {l:'Weekly review entry',k:'journal',f:()=>A.newJournal({k:'review'})},{l:'Refresh GitHub notes',k:'notes',f:()=>loadGhNotes(true)},{l:'Export backup',k:'data',f:A.export},{l:'Lock',k:'system',f:lock},
+    {l:'Weekly review entry',k:'journal',f:()=>A.newJournal({k:'review'})},{l:'Review queue',k:'study',f:()=>A.studyTab({t:'review'})},{l:'Quiz scores',k:'study',f:()=>A.studyTab({t:'quizzes'})},{l:'Refresh GitHub notes',k:'notes',f:()=>loadGhNotes(true)},{l:'Export backup',k:'data',f:A.export},{l:'Lock',k:'system',f:lock},
     ...S.notes.map(n=>({l:n.title||'Untitled',k:n.type,f:()=>{if(isJ(n)){jId=n.id;nView='journal'}else{noteId=n.id;nView='notes';nSubj=nTopic=nQ='';nType=nSrc='all'}go('notes')}})),
     ...(ghIdx?.items||[]).map(n=>({l:`${n.subject} · ${n.topic} — ${n.title}`,k:n.type,f:()=>{noteId=n.id;nView='notes';nSubj=n.subject;nTopic=n.topic;nType='all';nSrc='all';nQ='';go('notes')}})),
     ...S.roadmap.filter(r=>r.step!=null).map(r=>({l:`Step ${r.step} · ${r.title}`,k:'roadmap',f:()=>{studyTrack=r.track;A.studyTab({t:'roadmap'})}})),
@@ -1197,9 +1335,19 @@ function cmds(){
     ...S.projects.map(p=>({l:p.name,k:'project',f:()=>A.editProject({id:p.id})})),
   ];
 }
-function openPal(){$('#palWrap').classList.add('on');$('#palInput').value='';palSel=0;drawPal();$('#palInput').focus()}
+function openPal(){ghLoadAll();$('#palWrap').classList.add('on');$('#palInput').value='';palSel=0;drawPal();$('#palInput').focus()}
 function closePal(){$('#palWrap').classList.remove('on')}
-function drawPal(){const q=$('#palInput').value.toLowerCase();palList=cmds().filter(c=>c.l.toLowerCase().includes(q)).slice(0,12);palSel=Math.min(palSel,Math.max(0,palList.length-1));$('#palItems').innerHTML=palList.map((c,i)=>`<div class="it ${i===palSel?'on':''}" data-i="${i}"><span>${esc(c.l)}</span><span>${c.k}</span></div>`).join('')||'<div class="empty" style="padding:12px">No matches</div>'}
+/* Full-text: after title matches, list notes (GitHub + yours + journal) whose text contains the query, with a snippet. */
+function textHits(q,skip){
+  if(q.length<3)return [];
+  const out=[],pool=[...allNotes(),...S.notes.filter(isJ)];
+  for(const n of pool){const t=noteText(n),i=t.toLowerCase().indexOf(q);if(i<0||skip.has(n.title))continue;
+    const snip=t.slice(Math.max(0,i-30),i+q.length+40).replace(/\s+/g,' ').trim();
+    out.push({l:`${n.title}${n.topic?' · '+n.topic:''} — …${snip}…`,k:'in text',f:()=>{if(isJ(n)){jId=n.id;nView='journal'}else{noteId=n.id;nView='notes';nSubj=n.subject||'';nTopic=n.topic||'';nType='all';nSrc='all'}nQ='';go('notes')}});
+    if(out.length>=8)break}
+  return out;
+}
+function drawPal(){const q=$('#palInput').value.toLowerCase().trim();const hits=cmds().filter(c=>c.l.toLowerCase().includes(q));palList=[...hits.slice(0,8),...textHits(q,new Set(hits.map(h=>h.l)))].slice(0,14);palSel=Math.min(palSel,Math.max(0,palList.length-1));$('#palItems').innerHTML=palList.map((c,i)=>`<div class="it ${i===palSel?'on':''}" data-i="${i}"><span>${esc(c.l)}</span><span>${c.k}</span></div>`).join('')||'<div class="empty" style="padding:12px">No matches</div>'}
 $('#palInput').oninput=()=>{palSel=0;drawPal()};
 $('#palItems').onclick=e=>{const it=e.target.closest('.it');if(it){closePal();palList[+it.dataset.i].f()}};
 $('#palWrap').addEventListener('click',e=>{if(e.target.id==='palWrap')closePal()});
