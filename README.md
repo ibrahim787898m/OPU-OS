@@ -32,7 +32,8 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 ### Notes & Journal
 - **Course notes are read live from GitHub** (my `math`, `dsa` and `cs50x` repos). Each file is sorted by its folder path:
   `dsa/python/10_linked_list/quiz/lesson_3.md` → **DSA · Linked List · quiz**
-- Filters: a subject → topic tree, type chips (lesson, quiz, practice, review, reflection, problems, rough, extra, note), GitHub / Mine, sort by topic or recent, and full-text search
+- One finder panel: search, **Subject → Topic dropdowns**, type chips (lesson, quiz, practice, review, reflection, problems, rough, extra, note), GitHub / Mine, sort by topic or recent, and full-text search
+- The note gets the rest of the width, and **Focus mode** (button or `\`) hides the panel for full-width reading
 - My own notes in Markdown, with subject, topic, type, tags and pinning
 - Markdown rendering with tables, code blocks, task lists, quotes and numbered lists
 - **Journal**: daily entries with a mood picker, grouped by month, and a weekly-review template that fills in the week's numbers

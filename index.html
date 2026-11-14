@@ -129,6 +129,16 @@ main{padding:34px 40px 80px;max-width:1680px;width:100%;margin:0 auto}
 /* notes */
 .notes{display:grid;grid-template-columns:210px 290px minmax(0,1fr);gap:16px;min-height:70vh}
 .notes.j{grid-template-columns:290px minmax(0,1fr)}
+.notes.lib{grid-template-columns:330px minmax(0,1fr);gap:22px}
+.notes.lib.focus{grid-template-columns:minmax(0,1fr)}.notes.lib.focus>.npanel{display:none}
+.notes.lib .editor{max-width:1040px;width:100%}.notes.lib.focus .editor{margin:0 auto}
+.npanel{display:flex;flex-direction:column;gap:10px;position:sticky;top:18px;align-self:start;max-height:calc(100vh - 36px)}
+.npanel .nlist{flex:1;max-height:none;min-height:160px;overflow:auto;padding-right:2px}
+.npanel .tchips{margin:0}
+.nrow{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.nrow .seg button{padding:5px 10px;font-size:12px}
+.nsel{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nsel select{background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:7px 8px;font-size:13px;outline:none;min-width:0;color:var(--text)}
+.nsel select:focus{border-color:var(--acc)}.nsel select:disabled{color:var(--faint)}
 .nlist{display:flex;flex-direction:column;gap:6px;overflow:auto;max-height:78vh}
 .nside{display:flex;flex-direction:column;gap:14px;max-height:78vh;overflow:auto}
 .search{width:100%;padding:8px 12px;background:var(--panel);border:1px solid var(--line2);border-radius:9px;outline:none;font-size:14px}
@@ -292,11 +302,12 @@ tr:hover td{background:rgba(255,255,255,.015)}
   td,th{padding:8px 6px}td{font-size:13px}
   .banner{flex-wrap:wrap}
   /* notes: show the list OR the open note, never three squashed columns */
-  .notes,.notes.j{grid-template-columns:minmax(0,1fr);min-height:0}
+  .notes,.notes.j,.notes.lib,.notes.lib.focus{grid-template-columns:minmax(0,1fr);min-height:0}
+  .npanel{position:static;max-height:none}.notes.lib.focus>.npanel{display:flex}.dfocus{display:none}
   .nside,.nlist{max-height:none}
   .nside .tree{max-height:230px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px}
   .notes:not(.open)>.editor{display:none}
-  .notes.open>.nside,.notes.open>.ncol{display:none}
+  .notes.open>.nside,.notes.open>.ncol,.notes.lib.open>.npanel{display:none}
   .mback{display:inline-flex;align-self:flex-start}
   .editor textarea,.prose{min-height:60vh}
   .editor input.title{font-size:22px}
@@ -1073,12 +1084,14 @@ async function ghText(n){
 const ghLoadAll=()=>ghIdx?(ghAllP||=Promise.all(ghIdx.items.map(n=>ghText(n).catch(()=>''))).then(()=>{if(['notes','study','dash'].includes(view))render()})):Promise.resolve();
 
 /* ---------------- NOTES & JOURNAL ---------------- */
-let nOpen=false,noteId=null,noteMode='edit',nView='notes',nSrc='all',nSubj='',nTopic='',nType='all',nQ='',nSort='topic',jId=null,jQ='';
+let nFocus=!!localStorage.getItem('opuos.nfocus'),nOpen=false,noteId=null,noteMode='edit',nView='notes',nSrc='all',nSubj='',nTopic='',nType='all',nQ='',nSort='topic',jId=null,jQ='';
 const isJ=n=>n.type==='journal';
 const MOODS=['😣','😕','😐','🙂','😄'];
 function allNotes(){return [...S.notes.filter(n=>!isJ(n)).map(n=>({...n,src:n.src||'local'})),...(ghIdx?.items||[])]}
 function tkeyMap(list){const m={};list.forEach(n=>{if(n.tkey)m[n.subject+'|'+n.topic]??=n.tkey});return m}
 const noteText=n=>n.src==='github'?(ghBody[n.sha]||''):(n.body||'');
+// topic keys starting with '~' are my own topics: always after repo topics (localeCompare ignores '~')
+const cmpKey=(x,y)=>(x[0]==='~')-(y[0]==='~')||x.localeCompare(y,undefined,{numeric:true});
 const qMatch=(n,q)=>!q||[n.title,n.subject,n.topic,n.area,(n.tags||[]).join(' '),noteText(n)].join(' ').toLowerCase().includes(q);
 function notes(){return nView==='journal'?journal():notesLib()}
 function notesLib(){
@@ -1088,38 +1101,38 @@ function notesLib(){
   const subjects={};base.forEach(n=>{const s=n.subject||'Unsorted';(subjects[s]??={n:0,t:{}}).n++;const t=n.topic||'General';subjects[s].t[t]??={n:0,k:key(n)};subjects[s].t[t].n++});
   const inScope=base.filter(n=>(!nSubj||(n.subject||'Unsorted')===nSubj)&&(!nTopic||(n.topic||'General')===nTopic));
   const tc={};inScope.forEach(n=>tc[n.type]=(tc[n.type]||0)+1);
-  const list=inScope.filter(n=>nType==='all'||n.type===nType).sort(nSort==='recent'?(a,b)=>(b.updated||0)-(a.updated||0):(a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(a.subject||'~').localeCompare(b.subject||'~')||key(a).localeCompare(key(b),undefined,{numeric:true})||TYPE_ORD[a.type]-TYPE_ORD[b.type]||a.title.localeCompare(b.title,undefined,{numeric:true}));
+  const list=inScope.filter(n=>nType==='all'||n.type===nType).sort(nSort==='recent'?(a,b)=>(b.updated||0)-(a.updated||0):(a,b)=>(b.pinned?1:0)-(a.pinned?1:0)||(a.subject||'~').localeCompare(b.subject||'~')||cmpKey(key(a),key(b))||TYPE_ORD[a.type]-TYPE_ORD[b.type]||a.title.localeCompare(b.title,undefined,{numeric:true}));
   if(!list.find(n=>n.id===noteId))noteId=list[0]?.id;
   const n=list.find(x=>x.id===noteId);
   const subjList=Object.keys(subjects).sort((a,b)=>a==='Unsorted'?1:b==='Unsorted'?-1:a.localeCompare(b));
   const ghState=ghBusy?'<span class="pulse">syncing…</span>':ghErr?`<span style="color:var(--red)">${esc(ghErr)}</span>`:ghIdx?`${ghIdx.items.length} files · ${ago(new Date(ghIdx.at).toISOString())}`:'not loaded';
   return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">Course notes live from GitHub, plus your own notes. <span class="mono faint" style="font-size:12px">GitHub: ${ghState}</span></div></div>
   <div class="chips"><span class="seg"><button class="on">Notes</button><button data-act="nView" data-v="journal">Journal</button></span><button class="btn" data-act="ghNotes" title="Re-read your GitHub repos">↻ GitHub</button><button class="btn pri" data-act="newNote" data-t="note">+ Note</button></div></div>
-  <div class="notes ${nOpen?'open':''}">
-    <div class="nside">
+  <div class="notes lib ${nOpen?'open':''} ${nFocus?'focus':''}">
+    <div class="npanel">
       <input class="search" id="nQ" placeholder="Search notes…" value="${esc(nQ)}">
-      <span class="seg">${[['all','All'],['github','GitHub'],['local','Mine']].map(([k,l])=>`<button class="${nSrc===k?'on':''}" data-act="nSrc" data-v="${k}">${l}</button>`).join('')}</span>
-      <div class="tree"><button class="${!nSubj?'on':''}" data-act="nPick" data-s="" data-t=""><span>Everything</span><span>${base.length}</span></button>
-      ${subjList.map(s=>`<button class="${nSubj===s&&!nTopic?'on':''}" data-act="nPick" data-s="${esc(s)}" data-t=""><span><b>${esc(s)}</b></span><span>${subjects[s].n}</span></button>
-        ${nSubj===s?Object.entries(subjects[s].t).sort((a,b)=>a[1].k.localeCompare(b[1].k,undefined,{numeric:true})).map(([t,v])=>`<button class="sub ${nTopic===t?'on':''}" data-act="nPick" data-s="${esc(s)}" data-t="${esc(t)}"><span>${esc(t)}</span><span>${v.n}</span></button>`).join(''):''}`).join('')}</div>
-    </div>
-    <div class="ncol">
+      <div class="nrow"><span class="seg">${[['all','All'],['github','GitHub'],['local','Mine']].map(([k,l])=>`<button class="${nSrc===k?'on':''}" data-act="nSrc" data-v="${k}">${l}</button>`).join('')}</span>
+        <span class="seg">${[['topic','By topic'],['recent','Recent']].map(([k,l])=>`<button class="${nSort===k?'on':''}" data-act="nSort" data-v="${k}">${l}</button>`).join('')}</span></div>
+      <div class="nsel">
+        <select id="nSubjSel" title="Subject"><option value="">All subjects (${base.length})</option>${subjList.map(s=>`<option value="${esc(s)}" ${nSubj===s?'selected':''}>${esc(s)} (${subjects[s].n})</option>`).join('')}</select>
+        <select id="nTopSel" title="Topic" ${nSubj?'':'disabled'}><option value="">${nSubj?'All topics':'Pick a subject first'}</option>${nSubj&&subjects[nSubj]?Object.entries(subjects[nSubj].t).sort((a,b)=>cmpKey(a[1].k,b[1].k)).map(([t,v])=>`<option value="${esc(t)}" ${nTopic===t?'selected':''}>${esc(t)} (${v.n})</option>`).join(''):''}</select>
+      </div>
       <div class="tchips"><button class="tchip ${nType==='all'?'on':''}" data-act="nType" data-v="all">all<i>${inScope.length}</i></button>${NOTE_TYPES.filter(([k])=>tc[k]).map(([k,l])=>`<button class="tchip ${nType===k?'on':''}" data-act="nType" data-v="${k}">${l.toLowerCase()}<i>${tc[k]}</i></button>`).join('')}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="faint mono" style="font-size:11px">${list.length} note${list.length===1?'':'s'}${q&&ghIdx&&!ghAllP?' · searching titles…':''}</span><span class="seg">${[['topic','By topic'],['recent','Recent']].map(([k,l])=>`<button class="${nSort===k?'on':''}" style="padding:3px 9px;font-size:11px" data-act="nSort" data-v="${k}">${l}</button>`).join('')}</span></div>
+      <div class="faint mono" style="font-size:11px">${list.length} note${list.length===1?'':'s'}${nSubj?' · '+esc(nSubj)+(nTopic?' › '+esc(nTopic):''):''}${q&&ghIdx&&!ghAllP?' · searching titles…':''}</div>
       <div class="nlist">${list.map(x=>`<div class="nitem ${x.id===noteId?'on':''}" data-act="openNote" data-id="${esc(x.id)}"><div class="t">${x.pinned?'📌 ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ty-${x.type}">${x.type}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc([x.subject,x.topic].filter(Boolean).join(' · ')||(x.updated?ago(new Date(x.updated).toISOString()):''))}</span>${x.src==='github'?'<span title="From GitHub" style="margin-left:auto">⌥</span>':x.url?'<span title="Imported from Notion" style="margin-left:auto">N</span>':''}</div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub notes…':'Nothing matches.'}</div>`}</div>
     </div>
     ${n?(n.src==='github'?ghViewer(n):noteEditor(S.notes.find(x=>x.id===n.id))):'<div class="empty">Pick a note, or create one.</div>'}
   </div>`;
 }
 function ghViewer(n){
-  return `<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:0"><div class="label">${esc(n.subject)}${n.area?' · '+esc(n.area):''} · ${esc(n.topic)}</div><div style="font-size:24px;font-weight:700;letter-spacing:-.02em">${esc(n.title)}</div></div>
+  return `<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><button class="btn sm ghost dfocus" data-act="nFocus" title="Hide or show the notes list ( \\ )">${nFocus?'☰ Show list':'⇤ Focus'}</button><div style="flex:1;min-width:0"><div class="label">${esc(n.subject)}${n.area?' · '+esc(n.area):''} · ${esc(n.topic)}</div><div style="font-size:24px;font-weight:700;letter-spacing:-.02em">${esc(n.title)}</div></div>
     <span class="ty ty-${n.type}" style="margin-top:6px">${n.type}</span><a class="btn sm" href="${esc(n.url)}" target="_blank" rel="noopener">GitHub ↗</a></div>
     <div class="faint mono" style="font-size:11px">${esc(n.repo)}/${esc(n.path)} · read-only — edit it in your repo and push</div>
     <div class="prose" id="ghBody"><span class="faint pulse">Loading…</span></div></div>`;
 }
 function noteEditor(n){
   const all=allNotes(),subs=[...new Set(all.map(x=>x.subject).filter(Boolean))].sort(),tops=[...new Set(all.filter(x=>!n.subject||x.subject===n.subject).map(x=>x.topic).filter(Boolean))].sort();
-  return `<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1;min-width:0">
+  return `<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn sm ghost dfocus" data-act="nFocus" title="Hide or show the notes list ( \\ )">${nFocus?'☰ Show list':'⇤ Focus'}</button><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1;min-width:0">
     <span class="seg"><button class="${noteMode==='edit'?'on':''}" data-act="nm" data-m="edit">Write</button><button class="${noteMode==='view'?'on':''}" data-act="nm" data-m="view">Preview</button></span>
     <button class="btn sm ghost" data-act="pinNote" title="Pin to top">${n.pinned?'📌':'📍'}</button><button class="btn sm danger ghost" data-act="delNote">Delete</button></div>
     <div class="nmeta"><input id="nSubj" list="dlSubj" placeholder="Subject" value="${esc(n.subject)}" style="width:120px"><input id="nTop" list="dlTop" placeholder="Topic" value="${esc(n.topic)}" style="width:170px">
@@ -1150,6 +1163,7 @@ function journal(){
 after.notes=()=>{
   const keepFocus=(id,fn)=>{const el=$('#'+id);if(!el)return;el.oninput=()=>{fn(el.value);render();const e=$('#'+id);e.focus();e.setSelectionRange(e.value.length,e.value.length)}};
   keepFocus('nQ',v=>{nQ=v;if(v.trim())ghLoadAll()});keepFocus('jQ',v=>jQ=v);
+  const ss=$('#nSubjSel'),ts=$('#nTopSel');if(ss)ss.onchange=()=>A.nPick({s:ss.value,t:''});if(ts)ts.onchange=()=>A.nPick({s:nSubj,t:ts.value});
   if(nView==='journal'){const n=S.notes.find(x=>x.id===jId);if(!n)return;const t=$('#nTitle'),b=$('#nBody'),d=$('#jDate');
     const up=()=>{n.title=t.value;if(b)n.body=b.value;n.updated=Date.now();save()};t.oninput=up;if(b)b.oninput=up;d.onchange=()=>{n.date=d.value;save();render()};return}
   const g=ghIdx?.items.find(x=>x.id===noteId);
@@ -1329,6 +1343,7 @@ const A={
   nm:d=>{noteMode=d.m;render()},
   openNote:d=>{noteId=d.id;nOpen=true;render();if(innerWidth<=980)scrollTo(0,0)},
   nBack:()=>{nOpen=false;render()},
+  nFocus:()=>{nFocus=!nFocus;localStorage.setItem('opuos.nfocus',nFocus?'1':'');render()},
   ghNotes:()=>{toast('Reading your GitHub repos…');loadGhNotes(true)},
   newNote:d=>{const n={id:uid(),type:'note',title:'',body:'',tags:[],subject:nSubj&&nSubj!=='Unsorted'?nSubj:'',topic:nTopic&&nTopic!=='General'?nTopic:'',updated:Date.now()};S.notes.push(n);noteId=n.id;nOpen=true;nView='notes';nSrc='all';nType='all';nQ='';noteMode='edit';save();go('notes');setTimeout(()=>$('#nTitle')?.focus(),20)},
   pinNote:()=>{const n=S.notes.find(x=>x.id===noteId);n.pinned=!n.pinned;save();render()},
@@ -1424,6 +1439,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeModal();$('#app').classList.remove('drawer')}
   const tag=document.activeElement.tagName;if(['INPUT','TEXTAREA','SELECT'].includes(tag)||$('#modalWrap').classList.contains('on'))return;
   if(e.key==='[')return A.sideToggle();
+  if(e.key==='\\'&&view==='notes'&&nView==='notes')return A.nFocus();
   const v=['dash','study','skills','projects','career','github','notes','links','settings'][+e.key-1];if(v)go(v);
 });
 window.addEventListener('hashchange',()=>{const v=location.hash.slice(1);if(v!==view&&views[v])go(v)});
