@@ -1038,7 +1038,7 @@ const ghOwner=()=>S.settings.github||'ibrahim787898m';
 const pretty=s=>s.replace(/\.(md|txt)$/i,'').replace(/^\d+[_-]/,'').split(/[_-]+/).map((w,i)=>i&&SMALL.has(w.toLowerCase())?w.toLowerCase():w.charAt(0).toUpperCase()+w.slice(1)).join(' ');
 function ghMeta(repo,path){
   const parts=path.split('/'),file=parts.pop();
-  if(!/\.(md|txt)$/i.test(file)||/^(readme|license|changelog)\b/i.test(file))return null;
+  if(!/\.(md|txt)$/i.test(file)||/^(readme|license|changelog|contributing|requirements|robots|cmakelists)\b/i.test(file))return null; // skip non-note files
   let type=null;const last=(parts.at(-1)||'').toLowerCase();
   if(TYPE_DIRS[last]){type=TYPE_DIRS[last];parts.pop()}
   const base=file.toLowerCase().replace(/\.(md|txt)$/,'');
