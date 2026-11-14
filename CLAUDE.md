@@ -12,11 +12,11 @@ This repo is an **AI-built showcase app**, not a learning repo. Here, Claude wri
 - **The repo is public.** Never commit personal data, tokens, passphrases, Notion content or import/backup JSON. Import files go to `~/Downloads`, not the repo.
 - **Never handle the passphrase.** The owner runs `tools/set_owner.py` in his own terminal. Don't change the `OWNER` line or ask for the passphrase.
 - **Keep saved data compatible.** New fields go through `migrate()`; never wipe or reshape `localStorage['opuos.v1']` destructively.
-- Course notes are read **live and read-only** from the public `math`, `dsa` and `cs50x` repos. Don't copy them into the app.
+- Course notes and code are read **live and read-only** from public repos (Settings → note repos / code repos). Don't copy them into the app. **cs50x code stays out** (academic honesty), so don't add a way to show it.
 - Data flows into OPU/OS only (GitHub live, Notion by paste/import). Nothing writes back to Notion or GitHub.
 
 ## Code map (sections in index.html, in order)
-seed → `migrate()` → Gist sync → lock (`OWNER`, PBKDF2) → router → Dashboard → Study (week plan parser, review queue, quizzes, roadmap suggestions, LeetCode) → GitHub notes (`ghMeta`, `loadGhNotes`) → Notes & Journal → Markdown renderer (`md`, `inl`: escape first) → Settings → forms → actions object `A` (`data-act` clicks) → timer → command palette.
+seed → `migrate()` → Gist sync → lock (`OWNER`, PBKDF2) → router → Dashboard → Study (week plan parser, review queue, quizzes, roadmap suggestions, LeetCode) → GitHub notes (`ghMeta`, `loadGhNotes`; one tree fetch per repo feeds notes and code) → Code (`codeMeta`, `hl` highlighter, `lcCode`) → Notes & Journal (tabs Notes | Code | Journal) → Markdown renderer (`md`, `inl`: escape first) → Settings → forms → actions object `A` (`data-act` clicks) → timer → command palette.
 
 ## Testing (no Node here)
 Test in headless Chrome (`google-chrome --headless=new`):

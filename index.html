@@ -138,7 +138,15 @@ main{padding:34px 40px 80px;max-width:1680px;width:100%;margin:0 auto}
 .nrow{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}.nrow .seg button{padding:5px 10px;font-size:12px}
 .nsel{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .nsel select{background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:7px 8px;font-size:13px;outline:none;min-width:0;color:var(--text)}
-.nsel select:focus{border-color:var(--acc)}.nsel select:disabled{color:var(--faint)}
+.nsel select:focus{border-color:var(--acc)}
+/* code viewer */
+.codebox{display:flex;background:#07080b;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-height:50vh}
+.codebox pre{margin:0;padding:16px 0;font-family:var(--mono);font-size:13px;line-height:1.65}
+.codebox .lnums{padding:16px 12px 16px 14px;text-align:right;color:var(--faint);user-select:none;border-right:1px solid var(--line);background:rgba(255,255,255,.015);flex:none}
+.codebox .src{padding:16px 18px;overflow-x:auto;flex:1;tab-size:4}
+.hk{color:#ff7ab6}.hs{color:#b8f34a}.hc{color:#566074;font-style:italic}.hn{color:#ffc65c}.hf{color:#6ea8fe}
+.codestats{display:flex;gap:28px;align-items:center;flex-wrap:wrap}
+.cs-nums{display:flex;gap:28px}.cs-nums .v{font-size:26px;font-weight:700;letter-spacing:-.02em}.cs-nums .v small{font-size:14px;color:var(--dim)}.nsel select:disabled{color:var(--faint)}
 .nlist{display:flex;flex-direction:column;gap:6px;overflow:auto;max-height:78vh}
 .nside{display:flex;flex-direction:column;gap:14px;max-height:78vh;overflow:auto}
 .search{width:100%;padding:8px 12px;background:var(--panel);border:1px solid var(--line2);border-radius:9px;outline:none;font-size:14px}
@@ -309,6 +317,8 @@ tr:hover td{background:rgba(255,255,255,.015)}
   .notes:not(.open)>.editor{display:none}
   .notes.open>.nside,.notes.open>.ncol,.notes.lib.open>.npanel{display:none}
   .mback{display:inline-flex;align-self:flex-start}
+  .hide-m{display:none!important}
+  .codebox{min-height:0}.codebox pre{font-size:12px}.codebox .lnums{padding:16px 8px}
   .editor textarea,.prose{min-height:60vh}
   .editor input.title{font-size:22px}
   .day{grid-template-columns:22px minmax(0,1fr)}.day .pl{grid-column:2}
@@ -439,6 +449,7 @@ function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){} if(!S)S=s
 /* Upgrades older saved data in place — never wipes anything. */
 function migrate(){
   S.settings.noteRepos??=['math','dsa','cs50x'];
+  S.settings.codeRepos??=['CS50P','leetcode-solutions','dsa','math']; // cs50x left out on purpose (academic honesty)
   S.plans??=[];S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
   S.notes.forEach(n=>{n.tags??=[];n.subject??='';n.topic??='';if(n.type==='journal')n.date??=dstr(new Date(n.updated||Date.now()))});
 }
@@ -835,7 +846,7 @@ function studyLC(){
   <table class="lc"><tr><th></th><th>#</th><th>Problem</th><th>Pattern</th><th>Status</th><th>Practiced</th><th>Last revised</th><th></th></tr>
   ${list.map(p=>{const r=p.last>=S.lcRound;return `<tr class="${p.mistake?'mis':''}"><td><button class="ck ${r?'on':''}" data-act="lcRev" data-id="${p.id}" title="${r?'Undo':'Mark revised today'}">✓</button></td>
     <td class="mono muted">${p.num}</td>
-    <td><a href="https://leetcode.com/problems/${lcSlug(p.name)}/" target="_blank" rel="noopener" style="color:var(--text)">${esc(p.name)}</a> <span class="mono d-${esc(p.difficulty)}" style="font-size:11px">${esc(p.difficulty)}</span>${p.link?` <a href="${esc(p.link)}" target="_blank" rel="noopener" class="mono" style="font-size:11px">my solution ↗</a>`:''}<div class="ins">${esc(p.insight||'')}</div></td>
+    <td><a href="https://leetcode.com/problems/${lcSlug(p.name)}/" target="_blank" rel="noopener" style="color:var(--text)">${esc(p.name)}</a> <span class="mono d-${esc(p.difficulty)}" style="font-size:11px">${esc(p.difficulty)}</span>${lcCode(p)?` <button class="linkbtn mono" style="margin:0;font-size:11px;color:var(--blue)" data-act="openCode" data-id="${esc(lcCode(p).id)}">my solution</button>`:p.link?` <a href="${esc(p.link)}" target="_blank" rel="noopener" class="mono" style="font-size:11px">my solution ↗</a>`:''}<div class="ins">${esc(p.insight||'')}</div></td>
     <td class="muted" style="font-size:13px">${esc(p.pattern||'')}</td>
     <td><button class="pill clickable ${p.status==='Mastered'?'done':p.status==='Revisit'?'doing':''}" style="background:none" data-act="lcStat" data-id="${p.id}">${esc(p.status||'Solved')}</button></td>
     <td class="mono">${p.count||0}×</td><td class="mono muted" style="font-size:12px">${p.last?fmtDate(p.last):'—'}</td>
@@ -1061,17 +1072,21 @@ function ghMeta(repo,path){
 let ghIdx=(()=>{try{return JSON.parse(localStorage.getItem(GHN))}catch(e){return null}})(),ghBusy=false,ghErr='',ghAllP=null;
 const ghBody={};
 async function loadGhNotes(force){
-  const repos=S.settings.noteRepos||[],sig=ghOwner()+'|'+repos.join(',');
+  const nrep=S.settings.noteRepos||[],crep=S.settings.codeRepos||[],low=a=>a.map(x=>x.toLowerCase());
+  const repos=[...new Map([...nrep,...crep].map(r=>[r.toLowerCase(),r])).values()],sig=ghOwner()+'|'+nrep.join(',')+'|'+crep.join(',');
   if(ghBusy||(!force&&ghIdx?.sig===sig&&Date.now()-ghIdx.at<30*6e4))return;
   ghBusy=true;ghErr='';if(view==='notes')render();
   try{
-    const items=[];
+    const items=[],code=[];
     for(const r of repos){
       const res=await fetch(`https://api.github.com/repos/${ghOwner()}/${r}/git/trees/HEAD?recursive=1`,{cache:'no-store'});
       if(!res.ok)throw new Error(res.status===404?`Repo “${r}” not found — is it public?`:res.status===403?'GitHub rate limit — try again in a while':'GitHub error '+res.status);
-      (await res.json()).tree.forEach(t=>{if(t.type!=='blob')return;const m=ghMeta(r,t.path);if(m){m.sha=t.sha;items.push(m)}});
+      const isN=low(nrep).includes(r.toLowerCase()),isC=low(crep).includes(r.toLowerCase());
+      (await res.json()).tree.forEach(t=>{if(t.type!=='blob')return;
+        if(isN){const m=ghMeta(r,t.path);if(m){m.sha=t.sha;items.push(m)}}
+        if(isC){const c=codeMeta(r,t.path);if(c){c.sha=t.sha;code.push(c)}}});
     }
-    ghIdx={sig,at:Date.now(),items};ghAllP=null;localStorage.setItem(GHN,JSON.stringify(ghIdx));
+    ghIdx={sig,at:Date.now(),items,code};ghAllP=null;codeAllP=null;localStorage.setItem(GHN,JSON.stringify(ghIdx));
   }catch(e){ghErr=e.message}
   ghBusy=false;if(view==='notes'||view==='study')render();
 }
@@ -1083,6 +1098,113 @@ async function ghText(n){
 }
 const ghLoadAll=()=>ghIdx?(ghAllP||=Promise.all(ghIdx.items.map(n=>ghText(n).catch(()=>''))).then(()=>{if(['notes','study','dash'].includes(view))render()})):Promise.resolve();
 
+/* ---------------- CODE FROM GITHUB (read-only) ----------------
+   Code files from the "code repos" (Settings). cs50x is left out on purpose:
+   its problem-set code is kept private for academic honesty. */
+const CODE_EXT={py:'Python',c:'C',h:'C',cpp:'C++',hpp:'C++',cc:'C++',js:'JavaScript',ts:'TypeScript',java:'Java',sql:'SQL',sh:'Shell',go:'Go',rs:'Rust'};
+const LANG_COL={Python:'#6ea8fe',C:'#8a93a6','C++':'#ff7ab6',JavaScript:'#ffc65c',TypeScript:'#4fd1c5',Java:'#ff8a5c',SQL:'#9b8cff',Shell:'#b8f34a',Go:'#4fd1c5',Rust:'#ff8a5c'};
+const prettyDir=d=>pretty(d.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/([a-z])(\d)/g,'$1 $2').replace(/\s+/g,'_'));
+function codeMeta(repo,path){
+  const parts=path.split('/'),file=parts.pop(),ext=(file.match(/\.([a-z0-9]+)$/i)||[])[1]?.toLowerCase();
+  if(!ext||!CODE_EXT[ext])return null;
+  if(/template|^__init__\.py$|^setup\.py$/i.test(file)||parts.some(p=>/^(node_modules|venv|\.venv|\.github|__pycache__|build|dist)$/i.test(p)))return null;
+  const d=parts.map(prettyDir),norm=x=>x.toLowerCase().replace(/\s/g,'');
+  const sec=d.length>=2?(norm(d[1]).startsWith(norm(d[0]))?d[1]:d[0]+' › '+d[1]):(d[0]||'Root');
+  const tparts=parts.slice();if(tparts.length&&(TYPE_DIRS[tparts.at(-1).toLowerCase()]||/^code$/i.test(tparts.at(-1))))tparts.pop();
+  return {id:`code:${repo}/${path}`,src:'code',repo,path,name:file,ext,lang:CODE_EXT[ext],sec,seckey:parts.slice(0,2).join('/')||'~',sub:d.slice(2).join(' › '),
+    tkey:tparts.join('/'),test:/^test_|_test\./i.test(file),url:`https://github.com/${ghOwner()}/${repo}/blob/HEAD/${path.split('/').map(encodeURIComponent).join('/')}`};
+}
+let codeAllP=null;
+const codeLoadAll=()=>ghIdx?.code?(codeAllP||=Promise.all(ghIdx.code.map(n=>ghText(n).catch(()=>''))).then(()=>{if(view==='notes'&&nView==='code')render()})):Promise.resolve();
+const codeLines=t=>t?t.replace(/\n$/,'').split('\n').length:0;
+/* tiny syntax highlighter: tokens are escaped one by one, so file text can't inject HTML */
+const KW={py:new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield self'.split(' ')),
+  c:new Set('auto bool break case catch char class const constexpr continue default delete do double else enum extern false float for if include define int long namespace new nullptr private protected public return short signed sizeof static struct switch template this true try typedef typename union unsigned using virtual void volatile while let var function import export from of async await null undefined SELECT FROM WHERE JOIN ON AND OR INSERT INTO VALUES UPDATE SET DELETE CREATE TABLE ORDER BY GROUP LIMIT AS'.split(' '))};
+function hl(code,ext){
+  const py=ext==='py',kw=py?KW.py:KW.c;
+  const re=py?/("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|#[^\n]*|\b\d+(?:\.\d+)?\b|\b[A-Za-z_]\w*\b)/g
+             :/(\/\*[\s\S]*?\*\/|\/\/[^\n]*|--[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`[^`]*`|#\s*[a-z]+|\b\d+(?:\.\d+)?\b|\b[A-Za-z_]\w*\b)/g;
+  let out='',last=0,m,prev='';
+  while((m=re.exec(code))){
+    const t=m[0];let c='';
+    if(/^("""|'''|"|'|`)/.test(t))c='s';
+    else if(/^(\/\/|\/\*|--)/.test(t)||(py&&t[0]==='#'))c='c';
+    else if(t[0]==='#')c='k';
+    else if(/^\d/.test(t))c='n';
+    else if(kw.has(t))c='k';
+    else if(prev==='def'||prev==='class'||code[re.lastIndex]==='(')c='f';
+    out+=esc(code.slice(last,m.index))+(c?`<span class="h${c}">${esc(t)}</span>`:esc(t));
+    if(!/^\s*$/.test(t))prev=t;last=re.lastIndex;
+  }
+  return out+esc(code.slice(last));
+}
+const codeFor=(repo,tkey)=>(ghIdx?.code||[]).filter(c=>c.repo===repo&&tkey&&c.tkey===tkey);
+const notesFor=c=>(ghIdx?.items||[]).filter(n=>n.repo===c.repo&&c.tkey&&n.tkey===c.tkey);
+/* LeetCode: find my solution file from its GitHub link */
+function lcCode(p){
+  const m=(p.link||'').match(/github\.com\/[^/]+\/([^/]+)\/blob\/[^/]+\/(.+)$/);if(!m)return null;
+  const path=decodeURIComponent(m[2]),inRepo=(ghIdx?.code||[]).filter(c=>c.repo.toLowerCase()===m[1].toLowerCase());
+  return inRepo.find(c=>c.path===path)||inRepo.find(c=>c.name===path.split('/').pop())||null; // file may have moved folders
+}
+
+let cRepo='',cSec='',cLang='all',cQ='',codeId=null;
+function codeStats(){
+  const C=ghIdx?.code||[],loaded=C.filter(c=>ghBody[c.sha]!=null),byLang={},byRepo={};
+  loaded.forEach(c=>{const n=codeLines(ghBody[c.sha]);byLang[c.lang]=(byLang[c.lang]||0)+n;(byRepo[c.repo]??={f:0,l:0}).l+=n});
+  C.forEach(c=>{(byRepo[c.repo]??={f:0,l:0}).f++});
+  const total=Object.values(byLang).reduce((a,b)=>a+b,0),langs=Object.entries(byLang).sort((a,b)=>b[1]-a[1]);
+  return {C,loaded:loaded.length,total,langs,byRepo};
+}
+function codeLib(){
+  const st=codeStats(),q=cQ.trim().toLowerCase();
+  const C=st.C,repos=[...new Set(C.map(c=>c.repo))];
+  if(cRepo&&!repos.includes(cRepo)){cRepo='';cSec=''}
+  const inRepo=C.filter(c=>!cRepo||c.repo===cRepo),secs={};inRepo.forEach(c=>{(secs[c.sec]??={n:0,k:c.seckey}).n++});
+  const scoped=inRepo.filter(c=>(!cSec||c.sec===cSec)&&(!q||(c.path.toLowerCase().includes(q)||(ghBody[c.sha]||'').toLowerCase().includes(q))));
+  const lc={};scoped.forEach(c=>lc[c.lang]=(lc[c.lang]||0)+1);
+  const list=scoped.filter(c=>cLang==='all'||c.lang===cLang).sort((a,b)=>a.repo.localeCompare(b.repo)||a.seckey.localeCompare(b.seckey,undefined,{numeric:true})||a.sub.localeCompare(b.sub,undefined,{numeric:true})||a.name.localeCompare(b.name,undefined,{numeric:true}));
+  if(!list.find(c=>c.id===codeId))codeId=list[0]?.id;
+  const c=list.find(x=>x.id===codeId);
+  const counting=st.loaded<C.length;
+  return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">Your code, read live from GitHub (read-only). <span class="mono faint" style="font-size:12px">${esc((S.settings.codeRepos||[]).join(', '))}</span></div></div>
+  <div class="chips">${nTabs()}<button class="btn" data-act="ghNotes" title="Re-read your GitHub repos">↻ GitHub</button></div></div>
+  <div class="card codestats ${nOpen?'hide-m':''}" style="margin-bottom:18px"><div class="cs-nums"><div><div class="label">Files</div><div class="v">${C.length}</div></div><div><div class="label">Lines of code</div><div class="v">${st.total.toLocaleString()}${counting?'<small class="pulse"> …</small>':''}</div></div><div><div class="label">Languages</div><div class="v">${st.langs.length||'—'}</div></div></div>
+    <div style="flex:1;min-width:240px"><div class="lang" style="margin:4px 0 10px">${st.langs.map(([l,n])=>`<i title="${esc(l)}: ${n} lines" style="width:${n/(st.total||1)*100}%;background:${LANG_COL[l]||'#8a93a6'}"></i>`).join('')}</div>
+    <div class="chips">${st.langs.map(([l,n])=>`<span class="pill"><span class="dot" style="color:${LANG_COL[l]||'#8a93a6'}"></span>${esc(l)} ${n.toLocaleString()}</span>`).join('')}${Object.entries(st.byRepo).map(([r,v])=>`<span class="pill" style="border-style:dashed">${esc(r)} · ${v.f} files${v.l?' · '+v.l.toLocaleString()+' lines':''}</span>`).join('')}</div></div></div>
+  <div class="notes lib ${nOpen?'open':''} ${nFocus?'focus':''}">
+    <div class="npanel">
+      <input class="search" id="cQ" placeholder="Search file names and code…" value="${esc(cQ)}">
+      <div class="nsel">
+        <select id="cRepoSel"><option value="">All repos (${C.length})</option>${repos.map(r=>`<option value="${esc(r)}" ${cRepo===r?'selected':''}>${esc(r)} (${C.filter(x=>x.repo===r).length})</option>`).join('')}</select>
+        <select id="cSecSel" ${cRepo?'':'disabled'}><option value="">${cRepo?'All folders':'Pick a repo first'}</option>${cRepo?Object.entries(secs).sort((a,b)=>a[1].k.localeCompare(b[1].k,undefined,{numeric:true})).map(([s,v])=>`<option value="${esc(s)}" ${cSec===s?'selected':''}>${esc(s)} (${v.n})</option>`).join(''):''}</select>
+      </div>
+      <div class="tchips"><button class="tchip ${cLang==='all'?'on':''}" data-act="cLang" data-v="all">all<i>${scoped.length}</i></button>${Object.entries(lc).sort((a,b)=>b[1]-a[1]).map(([l,n])=>`<button class="tchip ${cLang===l?'on':''}" data-act="cLang" data-v="${esc(l)}">${esc(l.toLowerCase())}<i>${n}</i></button>`).join('')}</div>
+      <div class="faint mono" style="font-size:11px">${list.length} file${list.length===1?'':'s'}${q&&counting?' · loading code to search inside…':''}</div>
+      <div class="nlist">${list.map(x=>`<div class="nitem ${x.id===codeId?'on':''}" data-act="openCode" data-id="${esc(x.id)}"><div class="t mono" style="font-size:13.5px">${esc(x.name)}${x.test?' <span class="faint">(test)</span>':''}</div><div class="meta"><span class="ty" style="color:${LANG_COL[x.lang]||'var(--dim)'}">${esc(x.lang)}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc(x.repo)} · ${esc(x.sec)}${x.sub?' › '+esc(x.sub):''}</span></div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub code…':ghIdx?'No code files match.':'Not loaded yet.'}</div>`}</div>
+    </div>
+    ${c?codeViewer(c):'<div class="empty">Pick a file.</div>'}
+  </div>`;
+}
+function codeViewer(c){
+  const t=ghBody[c.sha],nf=notesFor(c);
+  return `<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button>
+    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><button class="btn sm ghost dfocus" data-act="nFocus" title="Hide or show the file list ( \\ )">${nFocus?'☰ Show list':'⇤ Focus'}</button>
+      <div style="flex:1 1 240px;min-width:0"><div class="label">${esc(c.repo)} · ${esc(c.sec)}${c.sub?' › '+esc(c.sub):''}</div><div class="mono" style="font-size:20px;font-weight:700;word-break:break-all">${esc(c.name)}</div></div>
+      <span class="ty" style="margin-top:6px;color:${LANG_COL[c.lang]||'var(--dim)'}">${esc(c.lang)}</span>${t!=null?`<span class="mono faint" style="font-size:12px;margin-top:6px">${codeLines(t)} lines</span>`:''}
+      <button class="btn sm" data-act="copyCode" data-id="${esc(c.id)}">Copy</button><a class="btn sm" href="${esc(c.url)}" target="_blank" rel="noopener">GitHub ↗</a></div>
+    ${nf.length?`<div class="chips" style="align-items:center"><span class="label">Notes for this topic</span>${nf.map(n=>`<button class="btn sm ghost" data-act="openGhNote" data-id="${esc(n.id)}"><span class="ty ty-${n.type}" style="margin-right:6px">${n.type}</span>${esc(n.title)}</button>`).join('')}</div>`:''}
+    <div class="codebox" id="codeBody">${t!=null?codeHtml(t,c.ext):'<div class="faint pulse" style="padding:16px">Loading…</div>'}</div></div>`;
+}
+const codeHtml=(t,ext)=>{const n=codeLines(t);return `<pre class="lnums">${Array.from({length:n},(_,i)=>i+1).join('\n')}</pre><pre class="src"><code>${hl(t.replace(/\n$/,''),ext)}</code></pre>`};
+function afterCode(){
+  const bind=(id,fn)=>{const el=$('#'+id);if(el)el.oninput=()=>{fn(el.value);render();const e=$('#'+id);e.focus();e.setSelectionRange(e.value.length,e.value.length)}};
+  bind('cQ',v=>{cQ=v;if(v.trim())codeLoadAll()});
+  const rs=$('#cRepoSel'),ss=$('#cSecSel');if(rs)rs.onchange=()=>{cRepo=rs.value;cSec='';nOpen=false;render()};if(ss)ss.onchange=()=>{cSec=ss.value;nOpen=false;render()};
+  codeLoadAll();
+  const c=ghIdx?.code?.find(x=>x.id===codeId);
+  if(c&&ghBody[c.sha]==null)ghText(c).then(()=>{if(view==='notes'&&nView==='code'&&codeId===c.id)render()}).catch(e=>{const el=$('#codeBody');if(el)el.innerHTML=`<div style="color:var(--red);padding:16px">${esc(e.message)}</div>`});
+}
+
 /* ---------------- NOTES & JOURNAL ---------------- */
 let nFocus=!!localStorage.getItem('opuos.nfocus'),nOpen=false,noteId=null,noteMode='edit',nView='notes',nSrc='all',nSubj='',nTopic='',nType='all',nQ='',nSort='topic',jId=null,jQ='';
 const isJ=n=>n.type==='journal';
@@ -1093,7 +1215,8 @@ const noteText=n=>n.src==='github'?(ghBody[n.sha]||''):(n.body||'');
 // topic keys starting with '~' are my own topics: always after repo topics (localeCompare ignores '~')
 const cmpKey=(x,y)=>(x[0]==='~')-(y[0]==='~')||x.localeCompare(y,undefined,{numeric:true});
 const qMatch=(n,q)=>!q||[n.title,n.subject,n.topic,n.area,(n.tags||[]).join(' '),noteText(n)].join(' ').toLowerCase().includes(q);
-function notes(){return nView==='journal'?journal():notesLib()}
+function notes(){return nView==='journal'?journal():nView==='code'?codeLib():notesLib()}
+const nTabs=()=>`<span class="seg">${[['notes','Notes'],['code','Code'],['journal','Journal']].map(([k,l])=>`<button class="${nView===k?'on':''}" ${nView===k?'':`data-act="nView" data-v="${k}"`}>${l}</button>`).join('')}</span>`;
 function notesLib(){
   const all=allNotes(),km=tkeyMap(all),q=nQ.trim().toLowerCase();
   const key=n=>n.tkey||km[n.subject+'|'+n.topic]||'~'+(n.topic||''); // own topics sort after repo topics
@@ -1107,7 +1230,7 @@ function notesLib(){
   const subjList=Object.keys(subjects).sort((a,b)=>a==='Unsorted'?1:b==='Unsorted'?-1:a.localeCompare(b));
   const ghState=ghBusy?'<span class="pulse">syncing…</span>':ghErr?`<span style="color:var(--red)">${esc(ghErr)}</span>`:ghIdx?`${ghIdx.items.length} files · ${ago(new Date(ghIdx.at).toISOString())}`:'not loaded';
   return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">Course notes live from GitHub, plus your own notes. <span class="mono faint" style="font-size:12px">GitHub: ${ghState}</span></div></div>
-  <div class="chips"><span class="seg"><button class="on">Notes</button><button data-act="nView" data-v="journal">Journal</button></span><button class="btn" data-act="ghNotes" title="Re-read your GitHub repos">↻ GitHub</button><button class="btn pri" data-act="newNote" data-t="note">+ Note</button></div></div>
+  <div class="chips">${nTabs()}<button class="btn" data-act="ghNotes" title="Re-read your GitHub repos">↻ GitHub</button><button class="btn pri" data-act="newNote" data-t="note">+ Note</button></div></div>
   <div class="notes lib ${nOpen?'open':''} ${nFocus?'focus':''}">
     <div class="npanel">
       <input class="search" id="nQ" placeholder="Search notes…" value="${esc(nQ)}">
@@ -1128,6 +1251,7 @@ function ghViewer(n){
   return `<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button><div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap"><button class="btn sm ghost dfocus" data-act="nFocus" title="Hide or show the notes list ( \\ )">${nFocus?'☰ Show list':'⇤ Focus'}</button><div style="flex:1;min-width:0"><div class="label">${esc(n.subject)}${n.area?' · '+esc(n.area):''} · ${esc(n.topic)}</div><div style="font-size:24px;font-weight:700;letter-spacing:-.02em">${esc(n.title)}</div></div>
     <span class="ty ty-${n.type}" style="margin-top:6px">${n.type}</span><a class="btn sm" href="${esc(n.url)}" target="_blank" rel="noopener">GitHub ↗</a></div>
     <div class="faint mono" style="font-size:11px">${esc(n.repo)}/${esc(n.path)} · read-only — edit it in your repo and push</div>
+    ${codeFor(n.repo,n.tkey).length?`<div class="chips" style="align-items:center"><span class="label">Code in this topic</span>${codeFor(n.repo,n.tkey).map(c=>`<button class="btn sm ghost mono" data-act="openCode" data-id="${esc(c.id)}">${esc(c.name)}</button>`).join('')}</div>`:''}
     <div class="prose" id="ghBody"><span class="faint pulse">Loading…</span></div></div>`;
 }
 function noteEditor(n){
@@ -1149,7 +1273,7 @@ function journal(){
   const n=list.find(x=>x.id===jId);
   const months={};list.forEach(x=>(months[(x.date||'').slice(0,7)]??=[]).push(x));
   return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">${S.notes.filter(isJ).length} journal entries · private to you.</div></div>
-  <div class="chips"><span class="seg"><button data-act="nView" data-v="notes">Notes</button><button class="on">Journal</button></span><button class="btn" data-act="newJournal" data-k="review">+ Weekly review</button><button class="btn pri" data-act="newJournal" data-k="daily">+ Today</button></div></div>
+  <div class="chips">${nTabs()}<button class="btn" data-act="newJournal" data-k="review">+ Weekly review</button><button class="btn pri" data-act="newJournal" data-k="daily">+ Today</button></div></div>
   <div class="notes j ${nOpen?'open':''}">
     <div class="nside"><input class="search" id="jQ" placeholder="Search journal…" value="${esc(jQ)}">
       ${Object.entries(months).map(([m,arr])=>`<div><div class="label" style="margin:4px 0 8px">${m?new Date(m+'-01T00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'}):'Undated'}</div><div class="nlist" style="max-height:none">${arr.map(x=>`<div class="nitem ${x.id===jId?'on':''}" data-act="openJ" data-id="${x.id}"><div class="t">${x.mood?MOODS[x.mood-1]+' ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ${x.kind==='review'?'ty-review':''}">${x.kind==='review'?'review':'daily'}</span><span>${x.date?fmtDate(x.date):''}</span></div></div>`).join('')}</div></div>`).join('')||'<div class="empty">No entries yet.</div>'}
@@ -1161,6 +1285,7 @@ function journal(){
   </div>`;
 }
 after.notes=()=>{
+  if(nView==='code')return afterCode();
   const keepFocus=(id,fn)=>{const el=$('#'+id);if(!el)return;el.oninput=()=>{fn(el.value);render();const e=$('#'+id);e.focus();e.setSelectionRange(e.value.length,e.value.length)}};
   keepFocus('nQ',v=>{nQ=v;if(v.trim())ghLoadAll()});keepFocus('jQ',v=>jQ=v);
   const ss=$('#nSubjSel'),ts=$('#nTopSel');if(ss)ss.onchange=()=>A.nPick({s:ss.value,t:''});if(ts)ts.onchange=()=>A.nPick({s:nSubj,t:ts.value});
@@ -1236,6 +1361,7 @@ function settings(){
       <div class="field"><span class="label">Website</span><input id="sSite" value="${esc(s.site)}"></div>
       <div class="field"><span class="label">Weekly study goal (hours)</span><input id="sGoal" type="number" min="1" value="${s.weeklyGoal}"></div>
       <div class="field"><span class="label">Course note repos (public, comma-separated)</span><input id="sRepos" value="${esc((s.noteRepos||[]).join(', '))}" placeholder="math, dsa, cs50x"><span class="faint" style="font-size:12px">Read live from github.com/${esc(ghOwner())}/… — shown in Notes.</span></div>
+      <div class="field"><span class="label">Code repos (public, comma-separated)</span><input id="sCode" value="${esc((s.codeRepos||[]).join(', '))}" placeholder="CS50P, leetcode-solutions"><span class="faint" style="font-size:12px">Code files shown in Notes → Code. cs50x is left out on purpose.</span></div>
       <button class="btn pri" data-act="saveSettings">Save</button></div>
     <div class="g" style="align-content:start">
       <div class="card"><h3>Cloud sync <span class="mono" style="text-transform:none;letter-spacing:0;color:${syncCfg()?.gistId?'var(--acc)':'var(--faint)'}">${syncCfg()?.gistId?'● connected':'○ off'}</span></h3>
@@ -1335,7 +1461,7 @@ const A={
   lcEdit:d=>{const p=find('leetcode',d.id);form('Edit problem',[...lcF_,{k:'mistake',label:'Made a mistake?',type:'select',opts:[['false','No'],['true','Yes']]}],p,o=>Object.assign(p,o,{num:+o.num,mistake:o.mistake==='true'}),del('leetcode',d.id))},
   lcRound:()=>{if(confirm(`Start a new revision round? The ✓ marks reset (practice counts are kept). Last round: ${lcRevised()}/${S.leetcode.length} revised.`)){S.lcRound=today();save();render()}},
   /* notes */
-  nView:d=>{nView=d.v;nOpen=false;noteMode=d.v==='journal'?'edit':noteMode;render()},
+  nView:d=>{nView=d.v;nOpen=false;noteMode=d.v==='journal'?'edit':noteMode;view==='notes'?render():go('notes')},
   nSrc:d=>{nSrc=d.v;render()},
   nPick:d=>{nSubj=d.s;nTopic=d.t;nType='all';nOpen=false;render()},
   nType:d=>{nType=d.v;render()},
@@ -1343,6 +1469,9 @@ const A={
   nm:d=>{noteMode=d.m;render()},
   openNote:d=>{noteId=d.id;nOpen=true;render();if(innerWidth<=980)scrollTo(0,0)},
   nBack:()=>{nOpen=false;render()},
+  openCode:d=>{const c=ghIdx?.code?.find(x=>x.id===d.id);if(!c)return;codeId=c.id;if(view!=='notes'||nView!=='code'){cRepo=c.repo;cSec=c.sec;cLang='all';cQ=''}nView='code';nOpen=true;go('notes');if(innerWidth<=980)scrollTo(0,0)},
+  cLang:d=>{cLang=d.v;nOpen=false;render()},
+  copyCode:d=>{const c=ghIdx?.code?.find(x=>x.id===d.id),t=c&&ghBody[c.sha];if(t==null)return;navigator.clipboard?.writeText(t).then(()=>toast('Copied'),()=>toast('Copy blocked by the browser'))},
   nFocus:()=>{nFocus=!nFocus;localStorage.setItem('opuos.nfocus',nFocus?'1':'');render()},
   ghNotes:()=>{toast('Reading your GitHub repos…');loadGhNotes(true)},
   newNote:d=>{const n={id:uid(),type:'note',title:'',body:'',tags:[],subject:nSubj&&nSubj!=='Unsorted'?nSubj:'',topic:nTopic&&nTopic!=='General'?nTopic:'',updated:Date.now()};S.notes.push(n);noteId=n.id;nOpen=true;nView='notes';nSrc='all';nType='all';nQ='';noteMode='edit';save();go('notes');setTimeout(()=>$('#nTitle')?.focus(),20)},
@@ -1359,7 +1488,7 @@ const A={
   openJ:d=>{jId=d.id;nOpen=true;render();if(innerWidth<=980)scrollTo(0,0)},
   jMood:d=>{const n=S.notes.find(x=>x.id===jId);n.mood=n.mood===+d.v?0:+d.v;save();render()},
   delJ:()=>{if(confirm('Delete this journal entry?')){S.notes=S.notes.filter(n=>n.id!==jId);jId=null;save();render()}},
-  saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github,repos=$('#sRepos').value.split(',').map(x=>x.trim()).filter(Boolean);Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20,noteRepos:repos});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite();loadGhNotes(true)},
+  saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github,repos=$('#sRepos').value.split(',').map(x=>x.trim()).filter(Boolean),crepos=$('#sCode').value.split(',').map(x=>x.trim()).filter(Boolean);Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20,noteRepos:repos,codeRepos:crepos});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite();loadGhNotes(true)},
   syncOn:()=>{const t=$('#sTok').value.trim();if(t)connectSync(t)},
   syncNow:async()=>{await pullGist();if(syncSt.s!=='err')await pushGist();toast(syncSt.s==='err'?syncSt.msg:'Synced')},
   syncOff:()=>{if(confirm('Disconnect cloud sync on this browser? (Your Gist is kept.)')){localStorage.removeItem(SYNC);setSync('off');render()}},
@@ -1404,6 +1533,7 @@ function cmds(){
     {l:'Weekly review entry',k:'journal',f:()=>A.newJournal({k:'review'})},{l:'Review queue',k:'study',f:()=>A.studyTab({t:'review'})},{l:'Quiz scores',k:'study',f:()=>A.studyTab({t:'quizzes'})},{l:'Refresh GitHub notes',k:'notes',f:()=>loadGhNotes(true)},{l:'Export backup',k:'data',f:A.export},{l:'Lock',k:'system',f:lock},
     ...S.notes.map(n=>({l:n.title||'Untitled',k:n.type,f:()=>{if(isJ(n)){jId=n.id;nView='journal'}else{noteId=n.id;nView='notes';nSubj=nTopic=nQ='';nType=nSrc='all'}go('notes')}})),
     ...(ghIdx?.items||[]).map(n=>({l:`${n.subject} · ${n.topic} — ${n.title}`,k:n.type,f:()=>{noteId=n.id;nView='notes';nSubj=n.subject;nTopic=n.topic;nType='all';nSrc='all';nQ='';go('notes')}})),
+    ...(ghIdx?.code||[]).map(c=>({l:`${c.name} — ${c.repo} · ${c.sec}`,k:'code',f:()=>A.openCode({id:c.id})})),
     ...S.roadmap.filter(r=>r.step!=null).map(r=>({l:`Step ${r.step} · ${r.title}`,k:'roadmap',f:()=>{studyTrack=r.track;A.studyTab({t:'roadmap'})}})),
     ...S.jobs.map(j=>({l:`${j.company} — ${j.role}`,k:'job',f:()=>A.editJob({id:j.id})})),
     ...S.projects.map(p=>({l:p.name,k:'project',f:()=>A.editProject({id:p.id})})),
@@ -1439,7 +1569,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeModal();$('#app').classList.remove('drawer')}
   const tag=document.activeElement.tagName;if(['INPUT','TEXTAREA','SELECT'].includes(tag)||$('#modalWrap').classList.contains('on'))return;
   if(e.key==='[')return A.sideToggle();
-  if(e.key==='\\'&&view==='notes'&&nView==='notes')return A.nFocus();
+  if(e.key==='\\'&&view==='notes'&&nView!=='journal')return A.nFocus();
   const v=['dash','study','skills','projects','career','github','notes','links','settings'][+e.key-1];if(v)go(v);
 });
 window.addEventListener('hashchange',()=>{const v=location.hash.slice(1);if(v!==view&&views[v])go(v)});

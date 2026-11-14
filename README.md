@@ -34,6 +34,8 @@ It's one `index.html` file with no build step, no framework and no server, hoste
   `dsa/python/10_linked_list/quiz/lesson_3.md` → **DSA · Linked List · quiz**
 - One finder panel: search, **Subject → Topic dropdowns**, type chips (lesson, quiz, practice, review, reflection, problems, rough, extra, note), GitHub / Mine, sort by topic or recent, and full-text search
 - The note gets the rest of the width, and **Focus mode** (button or `\`) hides the panel for full-width reading
+- **Code tab**: my code from GitHub (CS50P problem sets, LeetCode solutions, DSA and math programs) in a read-only viewer with syntax colours, line numbers and Copy. It has the same finder panel (repo → folder dropdowns, language chips, search inside code) and a **My code** strip with files and lines of code per language and repo. cs50x code is deliberately not published.
+- Notes and code are linked: a note shows "Code in this topic", a code file shows "Notes for this topic", and LeetCode "my solution" opens inside the app
 - My own notes in Markdown, with subject, topic, type, tags and pinning
 - Markdown rendering with tables, code blocks, task lists, quotes and numbered lists
 - **Journal**: daily entries with a mood picker, grouped by month, and a weekly-review template that fills in the week's numbers
