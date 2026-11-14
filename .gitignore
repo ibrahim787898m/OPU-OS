@@ -1,0 +1,14 @@
+# Private notes for me (never published)
+OPUOS_GUIDE.txt
+
+# Data files: backups and import files hold personal data
+opuos-backup-*.json
+opuos-notion-import*.json
+
+# System / editor junk
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+.vscode/
+.idea/
