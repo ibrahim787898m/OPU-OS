@@ -814,15 +814,39 @@ function studyRoadmap(){
 }
 
 /* ----- sessions ----- */
+/* Sessions tab: grouped by week, collapsible like Quizzes. This week starts open; older
+   weeks load 8 at a time ("Show older weeks"). Open/close choices: "opuos.sopen". */
+let sTrack='all',sWeeks=8;
+const sOpen=(()=>{try{return JSON.parse(localStorage.getItem('opuos.sopen'))||{}}catch(e){return {}}})();
+const sSaveOpen=()=>localStorage.setItem('opuos.sopen',JSON.stringify(sOpen));
+let sVisible=[];
 function studySessions(){
-  const ses=[...S.sessions].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,40);
-  return `<div class="g g3" style="margin-bottom:16px">
-      <div class="card stat"><div class="label">Week</div><div class="v">${(weekMinutes()/60).toFixed(1)}<small>h</small></div></div>
+  const all=S.sessions.filter(x=>x.date),tracks=[...new Set(all.map(x=>x.track).filter(Boolean))].sort();
+  if(sTrack!=='all'&&!tracks.includes(sTrack))sTrack='all';
+  const list=all.filter(x=>sTrack==='all'||x.track===sTrack);
+  const byWeek={};list.forEach(x=>(byWeek[mondayOf(new Date(x.date+'T00:00'))]??=[]).push(x));
+  const weeks=Object.keys(byWeek).sort().reverse(),cur=weekStart(),shown=weeks.slice(0,sWeeks);
+  sVisible=shown;
+  const totalMin=list.reduce((a,x)=>a+(+x.minutes||0),0),avgWeek=weeks.length?Math.round(totalMin/weeks.length):0;
+  const isOpen=w=>sOpen[w]??(w===cur);
+  const row=x=>`<tr><td class="mono muted">${fmtDate(x.date)}</td><td>${esc(x.topic)}<div class="faint" style="font-size:12px">${esc(x.track||'')}</div></td><td class="mono">${hm(+x.minutes)}</td><td class="mono muted">${+x.problems||''}</td><td style="text-align:right"><button class="btn sm ghost" data-act="editSession" data-id="${x.id}">${I('edit')}</button></td></tr>`;
+  return `<div class="g g4" style="margin-bottom:16px">
+      <div class="card stat"><div class="label">This week</div><div class="v">${(weekMinutes()/60).toFixed(1)}<small>h</small></div></div>
       <div class="card stat"><div class="label">Streak</div><div class="v">${streak()}<small>d</small></div></div>
-      <div class="card stat"><div class="label">Logged problems</div><div class="v">${solved()}</div></div></div>
-    <div class="card"><h3>Recent sessions</h3>
-    ${ses.length?`<table><tr><th>Date</th><th>Topic</th><th>Time</th><th>#</th><th></th></tr>${ses.map(s=>`<tr><td class="mono muted">${fmtDate(s.date)}</td><td>${esc(s.topic)}<div class="faint" style="font-size:12px">${esc(s.track||'')}</div></td><td class="mono">${hm(+s.minutes)}</td><td class="mono muted">${+s.problems||''}</td><td style="text-align:right"><button class="btn sm ghost" data-act="editSession" data-id="${s.id}">${I('edit')}</button></td></tr>`).join('')}</table>`:'<div class="empty">No sessions yet — use the focus timer or log one.</div>'}
-    </div>`;
+      <div class="card stat"><div class="label">Avg per week</div><div class="v">${hm(avgWeek)}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${weeks.length} week${weeks.length===1?'':'s'} logged${sTrack!=='all'?' · '+esc(sTrack):''}</div></div>
+      <div class="card stat"><div class="label">Logged problems</div><div class="v">${list.reduce((a,x)=>a+(+x.problems||0),0)}</div></div></div>
+    ${all.length?`<div class="qctl"><div class="tchips" style="margin:0">${['all',...tracks].map(t=>`<button class="tchip ${sTrack===t?'on':''}" data-act="sTrack" data-v="${esc(t)}">${esc(t==='all'?'all':t.toLowerCase())}<i>${t==='all'?all.length:all.filter(x=>x.track===t).length}</i></button>`).join('')}</div>
+      <span class="chips"><button class="btn sm ghost" data-act="sAll" data-v="1">Expand all</button><button class="btn sm ghost" data-act="sAll" data-v="0">Collapse all</button></span></div>`:''}
+    ${shown.map(w=>{const xs=byWeek[w].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)),open=isOpen(w),mins=xs.reduce((a,x)=>a+(+x.minutes||0),0),probs=xs.reduce((a,x)=>a+(+x.problems||0),0);
+      const per=[...Array(7)].map((_,i)=>{const d=addDays(w,i);return xs.filter(x=>x.date===d).reduce((a,x)=>a+(+x.minutes||0),0)}),mx=Math.max(60,...per);
+      return `<div class="card qgroup ${open?'open':''}"><button class="qhead" data-act="sToggle" data-k="${w}" data-open="${open?1:0}" aria-expanded="${open}">
+        <span class="qcar">${I('chev')}</span>
+        <span class="qname"><b>Week of ${fmtLong(w)}</b>${w===cur?' <span class="pill done" style="margin-left:6px">this week</span>':''} <span class="faint" style="font-size:13px">${xs.length} session${xs.length===1?'':'s'}${probs?' · '+probs+' problems':''}</span></span>
+        <span class="qspark qhide" title="Minutes per day, Mon to Sun">${per.map(m=>`<i style="height:${m?Math.max(12,m/mx*100):6}%;background:${m?'var(--acc)':'var(--line2)'}"></i>`).join('')}</span>
+        <span class="qavg mono" style="color:var(--text);min-width:64px">${hm(mins)}</span></button>
+        ${open?`<div class="qbody"><table><tr><th>Date</th><th>Topic</th><th>Time</th><th>#</th><th></th></tr>${xs.map(row).join('')}</table></div>`:''}</div>`}).join('')
+    ||'<div class="card"><div class="empty">No sessions yet. Use the focus timer or log one.</div></div>'}
+    ${weeks.length>shown.length?`<div style="text-align:center;margin-top:6px"><button class="btn" data-act="sMore">Show older weeks <span class="faint">(${weeks.length-shown.length} more)</span></button></div>`:''}`;
 }
 
 /* ----- weekly plan ----- */
@@ -1640,6 +1664,10 @@ const A={
   lcF:d=>{lcF=d.f;render()},
   rvAns:d=>{answerReview(d.k,d.ok==='1');save();render()},
   rvRetire:d=>{if(confirm('Retire this item? It leaves the review queue for good.')){S.review[d.k]={step:99,due:'9999-12-31',last:today()};save();render()}},
+  sToggle:d=>{sOpen[d.k]=d.open!=='1';sSaveOpen();render()},
+  sAll:d=>{sVisible.forEach(w=>sOpen[w]=d.v==='1');sSaveOpen();render()},
+  sTrack:d=>{sTrack=d.v;sWeeks=8;render()},
+  sMore:()=>{sWeeks+=8;render()},
   qToggle:d=>{qOpen[d.k]=d.open!=='1';qSaveOpen();render()},
   qAll:d=>{qVisible.forEach(k=>qOpen[k]=d.v==='1');qSaveOpen();render()},
   qSubj:d=>{qSubj=d.v;render()},

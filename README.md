@@ -25,7 +25,7 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 | **Quizzes** | First-attempt scores read automatically from each quiz file (`First attempt: 9/10`), shown as **collapsible topic rows** with average, a mini trend of each quiz's score, and badges (unfinished, to review). Filter by subject, sort by course order or weakest first, and expand or collapse all. Topics with an unfinished quiz open by themselves. Quizzes without a score line can be scored by hand. |
 | **Roadmap** | Numbered roadmap steps by track (DSA, Foundations, Math, Courses…) with phase, difficulty and links. A "Next up" banner, plus **suggestions from my repos**: steps that have notes on GitHub but are still marked *todo*. |
 | **LeetCode** | Every solved problem with difficulty, pattern, key insight and a link to my solution. A ✓ marks it revised in the current revision round, and filters show not revised, revisit and mistakes. |
-| **Sessions** | Logged study sessions (from the focus timer or added by hand). |
+| **Sessions** | Logged study sessions (from the focus timer or added by hand), grouped into **collapsible weeks** with total time, problems and a Mon–Sun mini chart. This week opens by itself, older weeks load 8 at a time, and track chips filter by subject. |
 
 **Weekly plans arrive automatically:** a small GitHub Action in a separate private repo copies the latest Notion "Week of …" pages into a secret Gist every 30 minutes. OPU/OS picks them up when it opens. New weeks are added, and mid-week edits update the plan while keeping ticks and review answers. Pasting still works as a fallback (**+ Add weekly plan**: open the page in Notion, press Ctrl+A then Ctrl+C, then paste).
 
