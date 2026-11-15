@@ -608,19 +608,30 @@ async function checkAutoPlans(force){
   }catch(e){planChk={at:Date.now(),msg:e.message,busy:false}}
   if(view==='study'||view==='dash')render();
 }
+/* Notion Tasks: a day is ticked when its task(s) are Done in Notion. Never unticks:
+   a tick made in OPU/OS can't reach Notion, so Notion's "To Do" mustn't undo it. */
+function notionTicks(p,tasks){
+  if(!tasks?.length)return;
+  p.days.forEach(d=>{
+    const same=tasks.filter(t=>t.date===d.date),lbl=d.day.split(/\s+/).slice(0,2).join(' ').toLowerCase();
+    const mine=same.filter(t=>t.title.toLowerCase().startsWith(lbl)),use=mine.length?mine:same;
+    if(use.length&&use.every(t=>/^done$/i.test(t.status))){d.done=true;d.nDone=true}
+  });
+}
 function mergeAutoPlans(list){
   let changed=0;const added=[];
   for(const r of list){
     if(!r?.week||!r.md)continue;
-    const i=S.plans.findIndex(x=>x.week===r.week),old=S.plans[i];
-    if(old&&old.srcMd===r.md)continue; // unchanged since last time
-    const p=parsePlan(r.md,r.week);Object.assign(p,{url:r.url||old?.url,srcMd:r.md,auto:true});if(r.title)p.title=r.title;
+    const i=S.plans.findIndex(x=>x.week===r.week),old=S.plans[i],key=r.md+'\u0000'+JSON.stringify(r.tasks||[]);
+    if(old&&(old.srcKey===key||(!old.srcKey&&old.srcMd===r.md&&!(r.tasks||[]).length)))continue; // unchanged since last time
+    const p=parsePlan(r.md,r.week);Object.assign(p,{url:r.url||old?.url,srcMd:r.md,srcKey:key,auto:true});if(r.title)p.title=r.title;
     if(old){p.id=old.id;p.added=old.added;
-      p.days.forEach(x=>{const o=old.days.find(y=>y.day===x.day);if(o)x.done=o.done});
+      p.days.forEach(x=>{const o=old.days.find(y=>y.day===x.day);if(o){x.done=o.done;x.nDone=o.nDone}});
       p.outcomes.forEach((x,k)=>{if(old.outcomes[k])x.done=old.outcomes[k].done});
       p.review.forEach(x=>{const o=old.review.find(y=>y.q===x.q);if(o?.a&&!x.a)x.a=o.a});
       S.plans[i]=p}
     else{S.plans.push(p);added.push(p.title)}
+    notionTicks(p,r.tasks);
     changed++;
   }
   if(changed){save();if(added.length)toast('New weekly plan: '+added.join(', '))}
@@ -871,7 +882,7 @@ function studyWeek(){
       <span class="chips"><select class="btn sm" id="planSel">${hist.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.title)}</option>`).join('')}</select>${p.url?`<a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}<button class="btn sm ghost danger" data-act="delPlan" data-id="${p.id}">Delete</button></span></h3>
       <div style="display:flex;justify-content:space-between" class="mono muted"><span style="font-size:12px">${dd}/${p.days.length} days done</span><span style="font-size:12px">${p.days.length?Math.round(dd/p.days.length*100):0}%</span></div>
       <div class="meter" style="margin:6px 0 16px"><i style="width:${p.days.length?dd/p.days.length*100:0}%"></i></div>
-      <div class="days">${p.days.map((d,i)=>`<div class="day ${d.done?'done':''} ${d.date===today()?'today':''}"><button class="ck ${d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${i}" title="Mark done">✓</button><div><div class="dn">${esc(d.day)}</div><div class="fo">${esc(d.focus)}</div></div><div class="pl">${inl(esc(d.plan))}</div></div>`).join('')||'<div class="empty">No day-by-day table found in this plan.</div>'}</div>
+      <div class="days">${p.days.map((d,i)=>`<div class="day ${d.done?'done':''} ${d.date===today()?'today':''}"><button class="ck ${d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${i}" title="Mark done">✓</button><div><div class="dn">${esc(d.day)}${d.nDone?' <span class="pill done" title="Marked Done in Notion" style="font-size:9px;padding:0 5px">N</span>':''}</div><div class="fo">${esc(d.focus)}</div></div><div class="pl">${inl(esc(d.plan))}</div></div>`).join('')||'<div class="empty">No day-by-day table found in this plan.</div>'}</div>
       ${p.daysNote?`<div class="faint" style="font-size:13px;margin-top:12px">${inl(esc(p.daysNote))}</div>`:''}
     </div>
     <div class="g" style="align-content:start">
@@ -1564,7 +1575,7 @@ const A={
   pastePlan:pastePlanModal,
   openPlan:d=>{planId=d.id;render()},
   delPlan:d=>{if(confirm('Delete this weekly plan?')){S.plans=S.plans.filter(p=>p.id!==d.id);planId=null;save();render()}},
-  pDay:d=>{const p=S.plans.find(x=>x.id===d.p),x=p.days[+d.i];x.done=!x.done;save();render();if(x.done&&p.days.every(y=>y.done))toast('Whole week done 🎉')},
+  pDay:d=>{const p=S.plans.find(x=>x.id===d.p),x=p.days[+d.i];x.done=!x.done;x.nDone=false;save();render();if(x.done&&p.days.every(y=>y.done))toast('Whole week done 🎉')},
   pOut:d=>{const o=S.plans.find(x=>x.id===d.p).outcomes[+d.i];o.done=!o.done;save();render()},
   reviewToJournal:d=>{const p=S.plans.find(x=>x.id===d.id);const n={id:uid(),type:'journal',kind:'review',date:today(),title:'Weekly review — '+p.title,body:p.review.map(r=>`## ${r.q}\n\n${r.a}\n`).join('\n'),tags:[],subject:'',topic:'',updated:Date.now()};S.notes.push(n);jId=n.id;nView='journal';noteMode='view';save();go('notes');toast('Saved to journal')},
   lcF:d=>{lcF=d.f;render()},
