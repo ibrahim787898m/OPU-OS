@@ -718,7 +718,7 @@ function dash(){
     <div class="card stat clickable" data-act="studyTab" data-t="leetcode"><div class="label">LeetCode solved</div><div class="v">${S.leetcode.length||solved()}</div><div class="k faint mono" style="font-size:12px">${S.leetcode.length?`revised ${lcRevised()}/${S.leetcode.length} this round`:`DSA roadmap ${pct('DSA')}%`}</div></div>
 
     <div class="card stat"><div class="label">Active applications</div><div class="v">${active}</div><div class="k faint mono" style="font-size:12px">${S.jobs.filter(j=>j.status==='interview').length} interviewing</div></div>
-    <div class="card" style="grid-column:1/-1"><h3><span>Today${p?` · ${esc(p.title||'Week of '+fmtDate(p.week))}`:''}</span><span class="chips">${reviewQueue().show.length?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().show.length} review${reviewQueue().show.length===1?'':'s'} due →</button>`:''}<button class="btn sm ghost" data-act="studyTab" data-t="week">Weekly plan →</button></span></h3>
+    <div class="card" style="grid-column:1/-1"><h3><span>Today${p?` · ${esc(p.title||'Week of '+fmtDate(p.week))}`:''}</span><span class="chips">${reviewQueue().fin.length?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().fin.length} quiz${reviewQueue().fin.length===1?'':'zes'} to finish →</button>`:''}${reviewQueue().show.length-reviewQueue().fin.length>0?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().show.length-reviewQueue().fin.length} review${reviewQueue().show.length-reviewQueue().fin.length===1?'':'s'} due →</button>`:''}<button class="btn sm ghost" data-act="studyTab" data-t="week">Weekly plan →</button></span></h3>
       ${td?`<div style="display:flex;gap:12px;align-items:flex-start"><button class="ck ${td.d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${td.i}">✓</button><div><div><strong>${esc(td.d.day)}</strong> <span class="pill" style="margin-left:6px">${esc(td.d.focus||'—')}</span></div><div style="margin-top:6px">${inl(esc(td.d.plan))}</div></div></div>`
       :p?`<div class="empty">Nothing planned for today in this week's plan.</div>`:`<div class="empty">No weekly plan yet. <button class="btn sm" data-act="pastePlan">+ Add weekly plan</button></div>`}
     </div>
@@ -986,6 +986,9 @@ function parseQuiz(t){
   const head=t.split('\n').slice(0,14).join('\n');
   const cl=head.split('\n').filter(l=>/corrected|needs review/i.test(l)&&!/first attempt and the corrected/i.test(l)).join(' '); // both feed the review queue
   const corrected=[...new Set(cl.match(/Q\d+(?:\([a-z]\))?/g)||[])];
+  // unfinished: "- Not marked yet: Q3, Q4 and Q5 aren't answered", "- Not answered yet: …", "- Unfinished: …", "- Skipped: …"
+  const ul=head.split('\n').filter(l=>/^\s*-\s*(not marked yet|not answered|unfinished|skipped)\b/i.test(l)||/aren'?t answered|not answered yet/i.test(l)).join(' ');
+  const unfinished=ul?[...new Set(ul.match(/Q\d+(?:\([a-z]\))?/g)||['some questions'])]:[];
   // Question text: math quizzes put it in the heading ("## Q3. Simplify…", "### (b) …");
   // DSA quizzes put it in a bold line under "## Q3". Code blocks are skipped.
   const prompts={},body={};let q=null,part=null,fence=false;
@@ -1000,13 +1003,13 @@ function parseQuiz(t){
   }
   for(const [k,ls] of Object.entries(body))if(!prompts[k]){const b=ls.find(l=>/^\*\*/.test(l));if(b)prompts[k]=b}
   for(const k in prompts)prompts[k]=prompts[k].replace(/\*\*/g,'').slice(0,240);
-  return {score:fa?num(fa[1]):null,outOf:fa?num(fa[2]):null,redo:rd?num(rd[1]):null,corrected,prompts};
+  return {score:fa?num(fa[1]):null,outOf:fa?num(fa[2]):null,redo:rd?num(rd[1]):null,corrected,unfinished,prompts};
 }
 function quizList(){
   return (ghIdx?.items||[]).filter(n=>n.type==='quiz').map(n=>{
-    const t=ghBody[n.sha],q=t!=null?parseQuiz(t):{score:null,outOf:null,corrected:[],prompts:{}},m=S.quizManual?.[n.id];
+    const t=ghBody[n.sha],q=t!=null?parseQuiz(t):{score:null,outOf:null,corrected:[],unfinished:[],prompts:{}},m=S.quizManual?.[n.id];
     const score=q.score??(m?+m.score:null),outOf=q.outOf??(m?+m.outOf||10:null);
-    return {n,loaded:t!=null,manual:q.score==null&&!!m,score,outOf,pctv:score!=null&&outOf?Math.round(score/outOf*100):null,redo:q.redo,corrected:q.score!=null?q.corrected:(m?.corrected||'').match(/Q\d+(?:\([a-z]\))?/g)||[],prompts:q.prompts};
+    return {n,loaded:t!=null,unfinished:q.unfinished||[],manual:q.score==null&&!!m,score,outOf,pctv:score!=null&&outOf?Math.round(score/outOf*100):null,redo:q.redo,corrected:q.score!=null?q.corrected:(m?.corrected||'').match(/Q\d+(?:\([a-z]\))?/g)||[],prompts:q.prompts};
   }).sort((a,b)=>a.n.subject.localeCompare(b.n.subject)||a.n.tkey.localeCompare(b.n.tkey,undefined,{numeric:true})||a.n.title.localeCompare(b.n.title,undefined,{numeric:true}));
 }
 const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null;
@@ -1026,7 +1029,7 @@ function studyQuizzes(){
   ${Object.entries(groups).sort((x,y)=>(y[1].some(q=>q.pctv!=null)?1:0)-(x[1].some(q=>q.pctv!=null)?1:0)).map(([k,a])=>{const av=avg(a.filter(q=>q.pctv!=null).map(q=>q.pctv));return `<div class="card" style="margin-bottom:14px"><h3><span>${esc(k)}</span><span class="mono" style="text-transform:none;letter-spacing:0;color:${pctColor(av)}">${av!=null?av+'% avg':'no scores yet'}</span></h3>
     <table><tr><th>Lesson</th><th style="width:40%">First attempt</th><th>Redo</th><th>Corrected</th><th></th></tr>
     ${a.map(q=>`<tr><td>${esc(q.n.title.replace('Quiz · ',''))}</td>
-      <td>${q.pctv!=null?`<div style="display:flex;align-items:center;gap:10px"><div class="meter" style="flex:1;margin:0"><i style="width:${q.pctv}%;background:${pctColor(q.pctv)}"></i></div><span class="mono" style="font-size:12px;min-width:52px">${q.score}/${q.outOf}</span></div>${q.manual?'<span class="faint mono" style="font-size:10px">entered by you</span>':''}`:`<span class="faint mono" style="font-size:12px">${q.loaded?'no score in file':'…'}</span>`}</td>
+      <td>${q.pctv!=null?`<div style="display:flex;align-items:center;gap:10px"><div class="meter" style="flex:1;margin:0"><i style="width:${q.pctv}%;background:${pctColor(q.pctv)}"></i></div><span class="mono" style="font-size:12px;min-width:52px">${q.score}/${q.outOf}</span></div>${q.manual?'<span class="faint mono" style="font-size:10px">entered by you</span>':''}`:(q.unfinished.length?`<span class="mono" style="font-size:12px;color:var(--amber)">unfinished: ${esc(q.unfinished.join(', '))}</span>`:`<span class="faint mono" style="font-size:12px">${q.loaded?'no score in file':'…'}</span>`)}</td>
       <td class="mono muted" style="font-size:12px">${q.redo!=null?q.redo+'/'+q.outOf:''}</td>
       <td class="mono" style="font-size:12px">${q.corrected.join(', ')||'<span class="faint">—</span>'}</td>
       <td style="text-align:right;white-space:nowrap">${q.loaded&&parseQuizScoreMissing(q)?`<button class="btn sm ghost" data-act="quizScore" data-id="${esc(q.n.id)}" title="Enter score">${I('edit')}</button>`:''}<button class="btn sm ghost" data-act="openGhNote" data-id="${esc(q.n.id)}">Open</button></td></tr>`).join('')}</table></div>`}).join('')}
@@ -1036,6 +1039,10 @@ const parseQuizScoreMissing=q=>q.manual||q.pctv==null;
 
 /* ----- review queue: spaced repetition over corrected quiz questions, LeetCode mistakes and your own items ----- */
 const IVL=[1,3,7,14,30,60];
+function finishItems(){
+  return quizList().filter(q=>q.unfinished.length).map(q=>({key:`todo:${q.n.repo}/${q.n.path}`,kind:'finish',label:`Finish ${q.n.subject} · ${q.n.topic} · ${q.n.title.replace('Quiz · ','')}`,sub:'not answered yet: '+q.unfinished.join(', '),detail:'You skipped these questions. Answer them in the quiz file, then ask for it to be marked; this reminder disappears by itself.',note:q.n.id}))
+    .filter(i=>!(S.review[i.key]?.due>today())); // "Remind me tomorrow" hides it until then
+}
 function reviewItems(){
   const out=[];
   quizList().forEach(q=>q.corrected.forEach(lbl=>out.push({key:`q:${q.n.repo}/${q.n.path}#${lbl}`,kind:'quiz',label:`${q.n.topic} · ${q.n.title.replace('Quiz · ','')} · ${lbl}`,sub:q.n.subject,detail:(()=>{const n=lbl.match(/\d+/)[0],par=q.prompts[n]||'';return lbl.includes('(')&&q.prompts[lbl.replace(/^Q/,'')]?(par?par+' — ':'')+lbl.slice(-3)+' '+q.prompts[lbl.replace(/^Q/,'')]:par})(),note:q.n.id})));
@@ -1047,7 +1054,8 @@ function reviewQueue(){
   const all=reviewItems(),t=today(),newToday=S.reviewNew?.date===t?S.reviewNew.n:0,cap=+S.settings.newPerDay||5;
   const due=all.filter(i=>S.review[i.key]&&S.review[i.key].due<=t).sort((a,b)=>S.review[a.key].due.localeCompare(S.review[b.key].due));
   const fresh=all.filter(i=>!S.review[i.key]);
-  return {all,due,fresh,newLeft:Math.max(0,cap-newToday),show:[...due,...fresh.slice(0,Math.max(0,cap-newToday))]};
+  const fin=finishItems();
+  return {all,due,fresh,fin,newLeft:Math.max(0,cap-newToday),show:[...fin,...due,...fresh.slice(0,Math.max(0,cap-newToday))]};
 }
 const reviewsBetween=(a,b)=>(S.reviewLog||[]).filter(x=>x.date>=a&&x.date<=b).length;
 function studyReview(){
@@ -1055,7 +1063,7 @@ function studyReview(){
   const qLoading=ghIdx&&quizList().some(q=>!q.loaded);
   const upcoming=R.all.filter(i=>S.review[i.key]&&S.review[i.key].due>today()).length;
   return `<div class="g g4" style="margin-bottom:16px">
-    <div class="card stat"><div class="label">Due now</div><div class="v" style="color:${R.show.length?'var(--amber)':'var(--acc)'}">${R.show.length}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${R.due.length} scheduled · ${Math.min(R.newLeft,R.fresh.length)} new</div></div>
+    <div class="card stat"><div class="label">Due now</div><div class="v" style="color:${R.show.length?'var(--amber)':'var(--acc)'}">${R.show.length}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${R.fin.length?R.fin.length+' to finish · ':''}${R.due.length} scheduled · ${Math.min(R.newLeft,R.fresh.length)} new</div></div>
     <div class="card stat"><div class="label">Not started yet</div><div class="v">${Math.max(0,R.fresh.length-R.newLeft)}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${+S.settings.newPerDay||5} new per day</div></div>
     <div class="card stat"><div class="label">Scheduled later</div><div class="v">${upcoming}</div></div>
     <div class="card stat"><div class="label">Reviewed this week</div><div class="v">${wk}</div></div>
@@ -1063,12 +1071,13 @@ function studyReview(){
   ${qLoading?`<div class="faint mono pulse" style="font-size:12px;margin-bottom:10px">reading quiz files from GitHub…</div>`:''}
   <div class="card"><h3><span>Today's reviews</span><span class="chips"><select class="btn sm" id="npd" title="New items per day">${[3,5,8,10,15].map(n=>`<option value="${n}" ${(+S.settings.newPerDay||5)===n?'selected':''}>${n} new/day</option>`).join('')}</select></span></h3>
   ${R.show.length?`<div class="list">${R.show.map(i=>{const st=S.review[i.key],nx=IVL[Math.min((st?.step??-1)+1,IVL.length-1)];return `<div class="li" style="align-items:flex-start;flex-wrap:wrap">
-    <span class="ty ${i.kind==='quiz'?'ty-quiz':i.kind==='leetcode'?'ty-practice':''}" style="margin-top:3px">${i.kind}</span>
+    <span class="ty ${i.kind==='quiz'?'ty-quiz':i.kind==='leetcode'?'ty-practice':''}" style="margin-top:3px;${i.kind==='finish'?'color:var(--amber);border-color:rgba(255,198,92,.45)':''}">${i.kind==='finish'?'to finish':i.kind}</span>
     <div class="grow" style="min-width:220px"><div style="font-weight:600">${esc(i.label)}</div>${i.sub?`<div class="faint mono" style="font-size:11px">${esc(i.sub)}${st?' · interval '+IVL[Math.min(st.step,IVL.length-1)]+'d':' · new'}</div>`:''}${i.detail?`<div class="muted" style="font-size:13.5px;margin-top:4px">${inl(esc(i.detail))}</div>`:''}</div>
     <div class="chips">${i.note?`<button class="btn sm" data-act="openGhNote" data-id="${esc(i.note)}">Open quiz</button>`:i.url?`<a class="btn sm" href="${esc(i.url)}" target="_blank" rel="noopener">Open ↗</a>`:''}
+      ${i.kind==='finish'?`<button class="btn sm ghost" data-act="rvLater" data-k="${esc(i.key)}">Remind me tomorrow</button></div></div>`:`
       <button class="btn sm danger" data-act="rvAns" data-k="${esc(i.key)}" data-ok="0" title="Didn't remember — see it again tomorrow">Again</button>
       <button class="btn sm pri" data-act="rvAns" data-k="${esc(i.key)}" data-ok="1" title="Remembered it">Got it · ${nx}d</button>
-      <button class="btn sm ghost" data-act="rvRetire" data-k="${esc(i.key)}" title="Know it for good — remove from queue">Retire</button></div></div>`}).join('')}</div>`
+      <button class="btn sm ghost" data-act="rvRetire" data-k="${esc(i.key)}" title="Know it for good — remove from queue">Retire</button></div></div>`}`}).join('')}</div>`
   :`<div class="empty">Nothing due — nice. ${upcoming?`Next review ${fmtDate(R.all.filter(i=>S.review[i.key]).map(i=>S.review[i.key].due).sort()[0])}.`:''}</div>`}
   <div class="faint" style="font-size:12px;margin-top:12px">Comes from: questions listed as <b>corrected</b> in your quiz files, LeetCode problems marked <b>mistake</b> or <b>Revisit</b>, and items you add. “Got it” pushes the next review out (1 → 3 → 7 → 14 → 30 → 60 days); “Again” brings it back tomorrow.</div></div>`;
 }
@@ -1581,6 +1590,7 @@ const A={
   lcF:d=>{lcF=d.f;render()},
   rvAns:d=>{answerReview(d.k,d.ok==='1');save();render()},
   rvRetire:d=>{if(confirm('Retire this item? It leaves the review queue for good.')){S.review[d.k]={step:99,due:'9999-12-31',last:today()};save();render()}},
+  rvLater:d=>{S.review[d.k]={step:0,due:addDays(today(),1),last:today()};save();render();toast('Reminder moved to tomorrow')},
   rvAdd:()=>form('Add review item',[{k:'label',label:'What to review',ph:'e.g. Contrapositive vs converse'},{k:'detail',label:'Prompt / hint',type:'textarea'},{k:'link',label:'Link (optional)'}],{},o=>S.reviewItems.push({id:uid(),...o})),
   quizScore:d=>{const m=S.quizManual[d.id]||{outOf:10};form('Quiz score',[{k:'score',label:'First attempt score',ph:'e.g. 8.5'},{k:'outOf',label:'Out of',ph:'10'},{k:'corrected',label:'Corrected questions',ph:'e.g. Q2, Q4(b)'}],m,o=>{if(o.score===''){delete S.quizManual[d.id];return}S.quizManual[d.id]={score:+o.score,outOf:+o.outOf||10,corrected:o.corrected}})},
   openGhNote:d=>{const n=ghIdx?.items.find(x=>x.id===d.id);if(!n)return;noteId=n.id;nView='notes';nSubj=n.subject;nTopic=n.topic;nType='all';nSrc='all';nQ='';go('notes')},
