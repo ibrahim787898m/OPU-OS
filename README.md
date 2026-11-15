@@ -27,7 +27,7 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 | **LeetCode** | Every solved problem with difficulty, pattern, key insight and a link to my solution. A ✓ marks it revised in the current revision round, and filters show not revised, revisit and mistakes. |
 | **Sessions** | Logged study sessions (from the focus timer or added by hand). |
 
-**Weekly plans arrive automatically:** a small GitHub Action in a separate private repo copies the latest Notion "Week of …" pages into a secret Gist every 4 hours. OPU/OS picks them up when it opens. New weeks are added, and mid-week edits update the plan while keeping ticks and review answers. Pasting still works as a fallback (**+ Add weekly plan**: open the page in Notion, press Ctrl+A then Ctrl+C, then paste).
+**Weekly plans arrive automatically:** a small GitHub Action in a separate private repo copies the latest Notion "Week of …" pages into a secret Gist every 30 minutes. OPU/OS picks them up when it opens. New weeks are added, and mid-week edits update the plan while keeping ticks and review answers. Pasting still works as a fallback (**+ Add weekly plan**: open the page in Notion, press Ctrl+A then Ctrl+C, then paste).
 
 ### Notes & Journal
 - **Course notes are read live from GitHub** (my `math`, `dsa` and `cs50x` repos). Each file is sorted by its folder path:
