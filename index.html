@@ -801,11 +801,12 @@ function study(){
 function studyRoadmap(){
   const tracks=tracksList().sort((a,b)=>S.roadmap.filter(r=>r.track===b).length-S.roadmap.filter(r=>r.track===a).length);
   if(!studyTrack||!tracks.includes(studyTrack))studyTrack=tracks.includes(nextUp()?.track)?nextUp().track:tracks[0];
-  const items=S.roadmap.filter(r=>r.track===studyTrack).sort(stepSort),nx=nextUp(),sug=roadmapSuggestions();
+  const allItems=S.roadmap.filter(r=>r.track===studyTrack).sort(stepSort),doneN=allItems.filter(r=>r.status==='done').length,showDone=rdOpen[studyTrack]??false,items=showDone?allItems:allItems.filter(r=>r.status!=='done'),nx=nextUp(),sug=roadmapSuggestions();
   return `${sug.length?`<div class="card" style="margin-bottom:16px"><h3>From your repos</h3><div class="list">${sug.map(x=>`<div class="li"><div class="grow"><div>${x.r.step!=null?`<b>Step ${x.r.step}</b> · `:''}${esc(x.r.title)} <span class="pill">todo</span></div><div class="faint mono" style="font-size:11px">notes found in ${esc(x.k)} · ${x.v.lesson} lesson, ${x.v.quiz} quiz file${x.v.quiz===1?'':'s'}</div></div><button class="btn sm pri" data-act="sugDo" data-id="${x.r.id}">Mark doing</button><button class="btn sm ghost" data-act="sugNo" data-id="${x.r.id}" data-k="${esc(x.k)}">Dismiss</button></div>`).join('')}</div></div>`:''}
   ${nx?`<div class="banner"><span><span class="label" style="margin-right:8px">Next up</span><strong>Step ${nx.step}</strong> · ${esc(nx.title)} <span class="faint">(${esc(nx.track)})</span></span>${nx.url?`<a class="btn sm" href="${esc(nx.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}</div>`:''}
   <div class="card"><h3><span class="seg" style="flex-wrap:wrap">${tracks.map(t=>`<button class="${t===studyTrack?'on':''}" data-act="track" data-t="${esc(t)}">${esc(t)} <span class="faint">${pct(t)}%</span></button>`).join('')}</span></h3>
     <div class="meter" style="margin:-4px 0 14px"><i style="width:${pct(studyTrack)}%"></i></div>
+    ${doneN?`<button class="btn sm ghost" style="width:100%;margin-bottom:8px;justify-content:center" data-act="rdDone">${showDone?`Hide ${doneN} done step${doneN===1?'':'s'}`:`<span style="color:var(--acc)">✓ ${doneN} done</span> · show them`}</button>`:''}
     <div class="track">${items.map((r,i)=>`<div class="step ${r.status}"><span class="n">${r.step!=null?r.step:'·'}</span><span class="title">${esc(r.title)}${r.notes?`<div class="faint" style="font-size:12px">${esc(r.notes)}</div>`:''}</span>
       ${r.phase?`<span class="pill">${esc(r.phase)}</span>`:''}${r.difficulty?`<span class="mono d-${esc(r.difficulty)}" style="font-size:11px">${esc(r.difficulty)}</span>`:''}
       ${r.url?`<a class="btn sm ghost" href="${esc(r.url)}" target="_blank" rel="noopener" title="Open in Notion">↗</a>`:''}
@@ -941,6 +942,7 @@ function studyWeek(){
   </div>`;
 }
 after.study=()=>{
+  const lq=$('#lcQ');if(lq)lq.oninput=()=>{lcQ=lq.value;render();const e=$('#lcQ');e.focus();e.setSelectionRange(e.value.length,e.value.length)};
   if(['review','quizzes','roadmap'].includes(studyTab)){if(!ghIdx)loadGhNotes();else ghLoadAll()}
   const np=$('#npd');if(np)np.onchange=()=>{S.settings.newPerDay=+np.value;save();render()};
   const sel=$('#planSel');if(sel)sel.onchange=()=>{planId=sel.value;render()};
@@ -997,11 +999,27 @@ function pastePlanModal(){
 const lcRevised=()=>S.leetcode.filter(p=>p.last&&p.last>=S.lcRound).length;
 const lcSlug=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 const LCS=['Solved','Revisit','Mastered'];
+/* LeetCode tab: problems grouped by pattern in collapsible rows (choices kept in
+   "opuos.lcopen"); typing in the search box shows matching problems directly. */
+let lcQ='',lcVisible=[];
+const lcOpen=(()=>{try{return JSON.parse(localStorage.getItem('opuos.lcopen'))||{}}catch(e){return {}}})();
+const LCTH='<tr><th></th><th>#</th><th>Problem</th><th>Pattern</th><th>Status</th><th>Practiced</th><th>Last revised</th><th></th></tr>';
+const lcRow=p=>{const r=p.last>=S.lcRound;return `<tr class="${p.mistake?'mis':''}"><td><button class="ck ${r?'on':''}" data-act="lcRev" data-id="${p.id}" title="${r?'Undo':'Mark revised today'}">✓</button></td>
+    <td class="mono muted">${p.num}</td>
+    <td><a href="https://leetcode.com/problems/${lcSlug(p.name)}/" target="_blank" rel="noopener" style="color:var(--text)">${esc(p.name)}</a> <span class="mono d-${esc(p.difficulty)}" style="font-size:11px">${esc(p.difficulty)}</span>${lcCode(p)?` <button class="linkbtn mono" style="margin:0;font-size:11px;color:var(--blue)" data-act="openCode" data-id="${esc(lcCode(p).id)}">my solution</button>`:p.link?` <a href="${esc(p.link)}" target="_blank" rel="noopener" class="mono" style="font-size:11px">my solution ↗</a>`:''}<div class="ins">${esc(p.insight||'')}</div></td>
+    <td class="muted" style="font-size:13px">${esc(p.pattern||'')}</td>
+    <td><button class="pill clickable ${p.status==='Mastered'?'done':p.status==='Revisit'?'doing':''}" style="background:none" data-act="lcStat" data-id="${p.id}">${esc(p.status||'Solved')}</button></td>
+    <td class="mono">${p.count||0}×</td><td class="mono muted" style="font-size:12px">${p.last?fmtDate(p.last):'—'}</td>
+    <td><button class="btn sm ghost" data-act="lcEdit" data-id="${p.id}">${I('edit')}</button></td></tr>`};
 function studyLC(){
   const L=S.leetcode,rev=lcRevised();
   if(!L.length)return `<div class="card" style="max-width:600px"><h3>LeetCode</h3><div class="empty">No problems yet. Import your Notion data from Settings, or add one.</div></div>`;
   const f={all:()=>true,todo:p=>!(p.last>=S.lcRound),revisit:p=>p.status==='Revisit',mistake:p=>p.mistake}[lcF];
-  const list=L.filter(f).sort((a,b)=>a.num-b.num);
+  const q=lcQ.trim().toLowerCase();
+  const list=L.filter(f).filter(p=>!q||[p.num,p.name,p.pattern,p.difficulty].join(' ').toLowerCase().includes(q)).sort((a,b)=>a.num-b.num);
+  const gm={};list.forEach(p=>(gm[p.pattern||'Other']??=[]).push(p));
+  const groups=Object.entries(gm).map(([k,l])=>({k,list:l,done:l.filter(p=>p.last>=S.lcRound).length,mis:l.filter(p=>p.mistake).length,rv:l.filter(p=>p.status==='Revisit').length})).sort((a,b)=>b.list.length-a.list.length||a.k.localeCompare(b.k));
+  lcVisible=groups.map(g=>g.k);
   const cnt=k=>L.filter(p=>p.difficulty===k).length;
   return `<div class="g g4" style="margin-bottom:16px">
     <div class="card stat"><div class="label">Revised this round</div><div class="v">${rev}<small> / ${L.length}</small></div><div class="meter"><i style="width:${rev/L.length*100}%"></i></div><div class="faint mono" style="font-size:11px;margin-top:8px">round started ${fmtDate(S.lcRound)}</div></div>
@@ -1009,16 +1027,17 @@ function studyLC(){
     <div class="card stat"><div class="label">Marked revisit</div><div class="v" style="color:var(--amber)">${L.filter(p=>p.status==='Revisit').length}</div></div>
     <div class="card stat"><div class="label">Had a mistake</div><div class="v" style="color:var(--red)">${L.filter(p=>p.mistake).length}</div></div>
   </div>
-  <div class="card"><h3><span class="seg">${[['all','All'],['todo','Not revised'],['revisit','Revisit'],['mistake','Mistakes']].map(([k,l])=>`<button class="${lcF===k?'on':''}" data-act="lcF" data-f="${k}">${l}</button>`).join('')}</span><span class="faint mono" style="text-transform:none;letter-spacing:0">${list.length} shown</span></h3>
-  <table class="lc"><tr><th></th><th>#</th><th>Problem</th><th>Pattern</th><th>Status</th><th>Practiced</th><th>Last revised</th><th></th></tr>
-  ${list.map(p=>{const r=p.last>=S.lcRound;return `<tr class="${p.mistake?'mis':''}"><td><button class="ck ${r?'on':''}" data-act="lcRev" data-id="${p.id}" title="${r?'Undo':'Mark revised today'}">✓</button></td>
-    <td class="mono muted">${p.num}</td>
-    <td><a href="https://leetcode.com/problems/${lcSlug(p.name)}/" target="_blank" rel="noopener" style="color:var(--text)">${esc(p.name)}</a> <span class="mono d-${esc(p.difficulty)}" style="font-size:11px">${esc(p.difficulty)}</span>${lcCode(p)?` <button class="linkbtn mono" style="margin:0;font-size:11px;color:var(--blue)" data-act="openCode" data-id="${esc(lcCode(p).id)}">my solution</button>`:p.link?` <a href="${esc(p.link)}" target="_blank" rel="noopener" class="mono" style="font-size:11px">my solution ↗</a>`:''}<div class="ins">${esc(p.insight||'')}</div></td>
-    <td class="muted" style="font-size:13px">${esc(p.pattern||'')}</td>
-    <td><button class="pill clickable ${p.status==='Mastered'?'done':p.status==='Revisit'?'doing':''}" style="background:none" data-act="lcStat" data-id="${p.id}">${esc(p.status||'Solved')}</button></td>
-    <td class="mono">${p.count||0}×</td><td class="mono muted" style="font-size:12px">${p.last?fmtDate(p.last):'—'}</td>
-    <td><button class="btn sm ghost" data-act="lcEdit" data-id="${p.id}">${I('edit')}</button></td></tr>`}).join('')}</table>
-  <div class="faint mono" style="font-size:11px;margin-top:10px">✓ = revised in this round (adds 1 to “practiced”). Click a status to cycle Solved → Revisit → Mastered.</div></div>`;
+  <div class="qctl"><input class="search" id="lcQ" placeholder="Search problems (name, number, pattern)…" value="${esc(lcQ)}" style="max-width:340px">
+    <span class="chips"><span class="seg">${[['all','All'],['todo','Not revised'],['revisit','Revisit'],['mistake','Mistakes']].map(([k,l])=>`<button class="${lcF===k?'on':''}" style="padding:4px 10px;font-size:12px" data-act="lcF" data-f="${k}">${l}</button>`).join('')}</span>
+    ${lcQ.trim()?'':`<button class="btn sm ghost" data-act="lcAll" data-v="1">Expand all</button><button class="btn sm ghost" data-act="lcAll" data-v="0">Collapse all</button>`}</span></div>
+  ${lcQ.trim()?`<div class="card"><h3><span>${list.length} match${list.length===1?'':'es'}</span></h3>${list.length?`<table class="lc">${LCTH}${list.map(lcRow).join('')}</table>`:'<div class="empty">No problem matches.</div>'}</div>`
+  :groups.map(g=>{const open=lcOpen[g.k]??false;return `<div class="card qgroup ${open?'open':''}"><button class="qhead" data-act="lcToggle" data-k="${esc(g.k)}" data-open="${open?1:0}" aria-expanded="${open}">
+      <span class="qcar">${I('chev')}</span>
+      <span class="qname"><b>${esc(g.k)}</b> <span class="faint" style="font-size:13px">${g.list.length} problem${g.list.length===1?'':'s'}</span></span>
+      ${g.mis?`<span class="pill qhide" style="color:var(--red);border-color:rgba(255,107,107,.4)">${g.mis} mistake${g.mis===1?'':'s'}</span>`:''}${g.rv?`<span class="pill qhide" style="color:var(--amber);border-color:rgba(255,198,92,.4)">${g.rv} revisit</span>`:''}
+      <span class="qavg mono" style="min-width:64px;color:${g.done===g.list.length?'var(--acc)':'var(--text)'}" title="Revised this round">${g.done}/${g.list.length} ✓</span></button>
+      ${open?`<div class="qbody"><table class="lc">${LCTH}${g.list.map(lcRow).join('')}</table></div>`:''}</div>`}).join('')||'<div class="card"><div class="empty">Nothing in this filter.</div></div>'}
+  <div class="faint mono" style="font-size:11px;margin-top:10px">Grouped by pattern; the number on the right is how many you've revised this round. ✓ = revised in this round (adds 1 to “practiced”). Click a status to cycle Solved → Revisit → Mastered.</div>`;
 }
 const lcF_=[{k:'num',label:'Problem number',type:'number'},{k:'name',label:'Name'},{k:'difficulty',label:'Difficulty',type:'select',opts:['Easy','Medium','Hard']},{k:'pattern',label:'Pattern',ph:'Two Pointer, Hashing…'},{k:'status',label:'Status',type:'select',opts:LCS},{k:'insight',label:'Key insight',type:'textarea'},{k:'link',label:'Solution link'}];
 
@@ -1066,6 +1085,7 @@ const pctColor=p=>p==null?'var(--faint)':p>=90?'var(--acc)':p>=75?'var(--amber)'
 /* Quizzes tab: one collapsible row per topic. A topic starts open only when it has an
    unfinished quiz; your open/close choices are remembered ("opuos.qopen"). */
 let qSubj='all',qSort='order',qVisible=[];
+let rvShow=10,nShow=30,rdOpen={},kShow={}; // paging / folding for long lists
 const qOpen=(()=>{try{return JSON.parse(localStorage.getItem('opuos.qopen'))||{}}catch(e){return {}}})();
 const qIsOpen=g=>qOpen[g.k]??(g.unf>0);
 const qSaveOpen=()=>localStorage.setItem('opuos.qopen',JSON.stringify(qOpen));
@@ -1144,14 +1164,14 @@ function studyReview(){
   </div>
   ${qLoading?`<div class="faint mono pulse" style="font-size:12px;margin-bottom:10px">reading quiz files from GitHub…</div>`:''}
   <div class="card"><h3><span>Today's reviews</span><span class="chips"><select class="btn sm" id="npd" title="New items per day">${[3,5,8,10,15].map(n=>`<option value="${n}" ${(+S.settings.newPerDay||5)===n?'selected':''}>${n} new/day</option>`).join('')}</select></span></h3>
-  ${R.show.length?`<div class="list">${R.show.map(i=>{const st=S.review[i.key],nx=IVL[Math.min((st?.step??-1)+1,IVL.length-1)];return `<div class="li" style="align-items:flex-start;flex-wrap:wrap">
+  ${R.show.length?`<div class="list">${R.show.slice(0,rvShow).map(i=>{const st=S.review[i.key],nx=IVL[Math.min((st?.step??-1)+1,IVL.length-1)];return `<div class="li" style="align-items:flex-start;flex-wrap:wrap">
     <span class="ty ${i.kind==='quiz'?'ty-quiz':i.kind==='leetcode'?'ty-practice':''}" style="margin-top:3px;${i.kind==='finish'?'color:var(--amber);border-color:rgba(255,198,92,.45)':''}">${i.kind==='finish'?'to finish':i.kind}</span>
     <div class="grow" style="min-width:220px"><div style="font-weight:600">${esc(i.label)}</div>${i.sub?`<div class="faint mono" style="font-size:11px">${esc(i.sub)}${st?' · interval '+IVL[Math.min(st.step,IVL.length-1)]+'d':' · new'}</div>`:''}${i.detail?`<div class="muted" style="font-size:13.5px;margin-top:4px">${inl(esc(i.detail))}</div>`:''}</div>
     <div class="chips">${i.note?`<button class="btn sm" data-act="openGhNote" data-id="${esc(i.note)}">Open quiz</button>`:i.url?`<a class="btn sm" href="${esc(i.url)}" target="_blank" rel="noopener">Open ↗</a>`:''}
       ${i.kind==='finish'?`<button class="btn sm ghost" data-act="rvLater" data-k="${esc(i.key)}">Remind me tomorrow</button></div></div>`:`
       <button class="btn sm danger" data-act="rvAns" data-k="${esc(i.key)}" data-ok="0" title="Didn't remember — see it again tomorrow">Again</button>
       <button class="btn sm pri" data-act="rvAns" data-k="${esc(i.key)}" data-ok="1" title="Remembered it">Got it · ${nx}d</button>
-      <button class="btn sm ghost" data-act="rvRetire" data-k="${esc(i.key)}" title="Know it for good — remove from queue">Retire</button></div></div>`}`}).join('')}</div>`
+      <button class="btn sm ghost" data-act="rvRetire" data-k="${esc(i.key)}" title="Know it for good — remove from queue">Retire</button></div></div>`}`}).join('')}</div>${R.show.length>rvShow?`<div style="text-align:center;margin-top:12px"><button class="btn" data-act="rvMore">Show ${Math.min(10,R.show.length-rvShow)} more <span class="faint">(${R.show.length-rvShow} left today)</span></button></div>`:''}`
   :`<div class="empty">Nothing due — nice. ${upcoming?`Next review ${fmtDate(R.all.filter(i=>S.review[i.key]).map(i=>S.review[i.key].due).sort()[0])}.`:''}</div>`}
   <div class="faint" style="font-size:12px;margin-top:12px">Comes from: questions listed as <b>corrected</b> in your quiz files, LeetCode problems marked <b>mistake</b> or <b>Revisit</b>, and items you add. “Got it” pushes the next review out (1 → 3 → 7 → 14 → 30 → 60 days); “Again” brings it back tomorrow.</div></div>`;
 }
@@ -1208,9 +1228,9 @@ function career(){
   const n=k=>S.jobs.filter(j=>j.status===k).length;
   return `<div class="head"><div><h2>Career</h2><div class="sub">Job hunt + co-op pipeline. ${S.jobs.length} tracked · ${n('interview')} interviewing.</div></div><button class="btn pri" data-act="addJob">+ Application</button></div>
   <div class="kanban">${JS.map(([k,l],ci)=>`<div class="col"><h4>${l}<span>${n(k)}</span></h4>
-    ${S.jobs.filter(j=>j.status===k).map(j=>`<div class="jcard" data-act="editJob" data-id="${j.id}"><div class="co">${esc(j.company)}</div><div class="ro">${esc(j.role)}</div>
+    ${S.jobs.filter(j=>j.status===k).slice(0,kShow[k]?999:6).map(j=>`<div class="jcard" data-act="editJob" data-id="${j.id}"><div class="co">${esc(j.company)}</div><div class="ro">${esc(j.role)}</div>
       <div class="ft"><span class="mono" style="font-size:11px">${j.followUp?`<span class="${j.followUp<today()?'over':j.followUp<=addDays(today(),3)?'due':'faint'}">${I('refresh')} ${fmtDate(j.followUp)}</span>`:`<span class="faint">${j.date?fmtDate(j.date):''}</span>`}</span>
-      <span class="mv">${ci>0?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="-1">←</button>`:''}${ci<JS.length-1?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="1">→</button>`:''}</span></div></div>`).join('')}
+      <span class="mv">${ci>0?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="-1">←</button>`:''}${ci<JS.length-1?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="1">→</button>`:''}</span></div></div>`).join('')}${n(k)>6?`<button class="btn sm ghost" style="width:100%" data-act="kMore" data-k="${k}">${kShow[k]?'Show fewer':`+${n(k)-6} more`}</button>`:''}
   </div>`).join('')}</div>`;
 }
 
@@ -1386,7 +1406,7 @@ function codeLib(){
       </div>
       <div class="tchips"><button class="tchip ${cLang==='all'?'on':''}" data-act="cLang" data-v="all">all<i>${scoped.length}</i></button>${Object.entries(lc).sort((a,b)=>b[1]-a[1]).map(([l,n])=>`<button class="tchip ${cLang===l?'on':''}" data-act="cLang" data-v="${esc(l)}">${esc(l.toLowerCase())}<i>${n}</i></button>`).join('')}</div>
       <div class="faint mono" style="font-size:11px">${list.length} file${list.length===1?'':'s'}${q&&counting?' · loading code to search inside…':''}</div>
-      <div class="nlist">${list.map(x=>`<div class="nitem ${x.id===codeId?'on':''}" data-act="openCode" data-id="${esc(x.id)}"><div class="t mono" style="font-size:13.5px">${esc(x.name)}${x.test?' <span class="faint">(test)</span>':''}</div><div class="meta"><span class="ty" style="color:${LANG_COL[x.lang]||'var(--dim)'}">${esc(x.lang)}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc(x.repo)} · ${esc(x.sec)}${x.sub?' › '+esc(x.sub):''}</span></div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub code…':ghIdx?'No code files match.':'Not loaded yet.'}</div>`}</div>
+      <div class="nlist">${list.slice(0,nShow).map(x=>`<div class="nitem ${x.id===codeId?'on':''}" data-act="openCode" data-id="${esc(x.id)}"><div class="t mono" style="font-size:13.5px">${esc(x.name)}${x.test?' <span class="faint">(test)</span>':''}</div><div class="meta"><span class="ty" style="color:${LANG_COL[x.lang]||'var(--dim)'}">${esc(x.lang)}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc(x.repo)} · ${esc(x.sec)}${x.sub?' › '+esc(x.sub):''}</span></div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub code…':ghIdx?'No code files match.':'Not loaded yet.'}</div>`}${list.length>nShow?moreBtn(list.length):''}</div>
     </div>
     ${c?codeViewer(c):'<div class="empty">Pick a file.</div>'}
   </div>`;
@@ -1404,7 +1424,7 @@ function codeViewer(c){
 const codeHtml=(t,ext)=>{const n=codeLines(t);return `<pre class="lnums">${Array.from({length:n},(_,i)=>i+1).join('\n')}</pre><pre class="src"><code>${hl(t.replace(/\n$/,''),ext)}</code></pre>`};
 function afterCode(){
   const bind=(id,fn)=>{const el=$('#'+id);if(el)el.oninput=()=>{fn(el.value);render();const e=$('#'+id);e.focus();e.setSelectionRange(e.value.length,e.value.length)}};
-  bind('cQ',v=>{cQ=v;if(v.trim())codeLoadAll()});
+  bind('cQ',v=>{nShow=30;cQ=v;if(v.trim())codeLoadAll()});
   const rs=$('#cRepoSel'),ss=$('#cSecSel');if(rs)rs.onchange=()=>{cRepo=rs.value;cSec='';nOpen=false;render()};if(ss)ss.onchange=()=>{cSec=ss.value;nOpen=false;render()};
   codeLoadAll();
   const c=ghIdx?.code?.find(x=>x.id===codeId);
@@ -1448,7 +1468,7 @@ function notesLib(){
       </div>
       <div class="tchips"><button class="tchip ${nType==='all'?'on':''}" data-act="nType" data-v="all">all<i>${inScope.length}</i></button>${NOTE_TYPES.filter(([k])=>tc[k]).map(([k,l])=>`<button class="tchip ${nType===k?'on':''}" data-act="nType" data-v="${k}">${l.toLowerCase()}<i>${tc[k]}</i></button>`).join('')}</div>
       <div class="faint mono" style="font-size:11px">${list.length} note${list.length===1?'':'s'}${nSubj?' · '+esc(nSubj)+(nTopic?' › '+esc(nTopic):''):''}${q&&ghIdx&&!ghAllP?' · searching titles…':''}</div>
-      <div class="nlist">${list.map(x=>`<div class="nitem ${x.id===noteId?'on':''}" data-act="openNote" data-id="${esc(x.id)}"><div class="t">${x.pinned?'📌 ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ty-${x.type}">${x.type}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc([x.subject,x.topic].filter(Boolean).join(' · ')||(x.updated?ago(new Date(x.updated).toISOString()):''))}</span>${x.src==='github'?'<span title="From GitHub" style="margin-left:auto">'+I('git')+'</span>':x.url?'<span title="Imported from Notion" style="margin-left:auto">N</span>':''}</div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub notes…':'Nothing matches.'}</div>`}</div>
+      <div class="nlist">${list.slice(0,nShow).map(x=>`<div class="nitem ${x.id===noteId?'on':''}" data-act="openNote" data-id="${esc(x.id)}"><div class="t">${x.pinned?'📌 ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ty-${x.type}">${x.type}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc([x.subject,x.topic].filter(Boolean).join(' · ')||(x.updated?ago(new Date(x.updated).toISOString()):''))}</span>${x.src==='github'?'<span title="From GitHub" style="margin-left:auto">'+I('git')+'</span>':x.url?'<span title="Imported from Notion" style="margin-left:auto">N</span>':''}</div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub notes…':'Nothing matches.'}</div>`}${list.length>nShow?moreBtn(list.length):''}</div>
     </div>
     ${n?(n.src==='github'?ghViewer(n):noteEditor(S.notes.find(x=>x.id===n.id))):'<div class="empty">Pick a note, or create one.</div>'}
   </div>`;
@@ -1472,17 +1492,19 @@ function noteEditor(n){
       <datalist id="dlSubj">${subs.map(s=>`<option value="${esc(s)}">`).join('')}</datalist><datalist id="dlTop">${tops.map(s=>`<option value="${esc(s)}">`).join('')}</datalist></div>
     ${noteMode==='edit'?`<textarea id="nBody" placeholder="Start writing… (Markdown)">${esc(n.body)}</textarea>`:`<div class="prose">${md(n.body)}</div>`}</div>`;
 }
+const moreBtn=total=>`<button class="btn sm" style="width:100%;margin-top:6px" data-act="nMore">Show ${Math.min(30,total-nShow)} more <span class="faint">(${total-nShow} left)</span></button>`;
 function journal(){
   const q=jQ.trim().toLowerCase();
   const list=S.notes.filter(isJ).filter(n=>!q||(n.title+' '+n.body).toLowerCase().includes(q)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.updated||0)-(a.updated||0));
   if(!list.find(n=>n.id===jId))jId=list[0]?.id;
   const n=list.find(x=>x.id===jId);
-  const months={};list.forEach(x=>(months[(x.date||'').slice(0,7)]??=[]).push(x));
+  const months={};list.slice(0,nShow).forEach(x=>(months[(x.date||'').slice(0,7)]??=[]).push(x));
   return `<div class="head"><div><h2>Notes &amp; Journal</h2><div class="sub">${S.notes.filter(isJ).length} journal entries · private to you.</div></div>
   <div class="chips">${nTabs()}<button class="btn" data-act="newJournal" data-k="review">+ Weekly review</button><button class="btn pri" data-act="newJournal" data-k="daily">+ Today</button></div></div>
   <div class="notes j ${nOpen?'open':''}">
     <div class="nside"><input class="search" id="jQ" placeholder="Search journal…" value="${esc(jQ)}">
       ${Object.entries(months).map(([m,arr])=>`<div><div class="label" style="margin:4px 0 8px">${m?new Date(m+'-01T00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'}):'Undated'}</div><div class="nlist" style="max-height:none">${arr.map(x=>`<div class="nitem ${x.id===jId?'on':''}" data-act="openJ" data-id="${x.id}"><div class="t">${x.mood?MOODS[x.mood-1]+' ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ${x.kind==='review'?'ty-review':''}">${x.kind==='review'?'review':'daily'}</span><span>${x.date?fmtDate(x.date):''}</span></div></div>`).join('')}</div></div>`).join('')||'<div class="empty">No entries yet.</div>'}
+      ${list.length>nShow?moreBtn(list.length):''}
     </div>
     ${n?`<div class="editor"><button class="btn sm mback" data-act="nBack">← Back to list</button><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><input class="title" id="nTitle" value="${esc(n.title)}" placeholder="Untitled" style="flex:1;min-width:200px">
       <span class="seg"><button class="${noteMode==='edit'?'on':''}" data-act="nm" data-m="edit">Write</button><button class="${noteMode==='view'?'on':''}" data-act="nm" data-m="view">Preview</button></span><button class="btn sm danger ghost" data-act="delJ">Delete</button></div>
@@ -1493,7 +1515,7 @@ function journal(){
 after.notes=()=>{
   if(nView==='code')return afterCode();
   const keepFocus=(id,fn)=>{const el=$('#'+id);if(!el)return;el.oninput=()=>{fn(el.value);render();const e=$('#'+id);e.focus();e.setSelectionRange(e.value.length,e.value.length)}};
-  keepFocus('nQ',v=>{nQ=v;if(v.trim())ghLoadAll()});keepFocus('jQ',v=>jQ=v);
+  keepFocus('nQ',v=>{nShow=30;nQ=v;if(v.trim())ghLoadAll()});keepFocus('jQ',v=>jQ=v);
   const ss=$('#nSubjSel'),ts=$('#nTopSel');if(ss)ss.onchange=()=>A.nPick({s:ss.value,t:''});if(ts)ts.onchange=()=>A.nPick({s:nSubj,t:ts.value});
   if(nView==='journal'){const n=S.notes.find(x=>x.id===jId);if(!n)return;const t=$('#nTitle'),b=$('#nBody'),d=$('#jDate');
     const up=()=>{n.title=t.value;if(b)n.body=b.value;n.updated=Date.now();save()};t.oninput=up;if(b)b.oninput=up;d.onchange=()=>{n.date=d.value;save();render()};return}
@@ -1654,7 +1676,7 @@ const A={
   ghSet:()=>{const u=$('#ghU').value.trim();if(!u)return;S.settings.github=u;S.gh=null;save();render();syncGH()},
   ghSync:()=>{toast('Syncing…');syncGH()},
   /* study */
-  studyTab:d=>{studyTab=d.t;planId=null;go('study')},
+  studyTab:d=>{rvShow=10;studyTab=d.t;planId=null;go('study')},
   pastePlan:pastePlanModal,
   openPlan:d=>{planId=d.id;render()},
   delPlan:d=>{if(confirm('Delete this weekly plan?')){S.plans=S.plans.filter(p=>p.id!==d.id);planId=null;save();render()}},
@@ -1668,6 +1690,12 @@ const A={
   sAll:d=>{sVisible.forEach(w=>sOpen[w]=d.v==='1');sSaveOpen();render()},
   sTrack:d=>{sTrack=d.v;sWeeks=8;render()},
   sMore:()=>{sWeeks+=8;render()},
+  lcToggle:d=>{lcOpen[d.k]=d.open!=='1';localStorage.setItem('opuos.lcopen',JSON.stringify(lcOpen));render()},
+  lcAll:d=>{lcVisible.forEach(k=>lcOpen[k]=d.v==='1');localStorage.setItem('opuos.lcopen',JSON.stringify(lcOpen));render()},
+  rvMore:()=>{rvShow+=10;render()},
+  nMore:()=>{nShow+=30;render()},
+  rdDone:()=>{rdOpen[studyTrack]=!(rdOpen[studyTrack]??false);render()},
+  kMore:d=>{kShow[d.k]=!kShow[d.k];render()},
   qToggle:d=>{qOpen[d.k]=d.open!=='1';qSaveOpen();render()},
   qAll:d=>{qVisible.forEach(k=>qOpen[k]=d.v==='1');qSaveOpen();render()},
   qSubj:d=>{qSubj=d.v;render()},
@@ -1684,16 +1712,16 @@ const A={
   lcEdit:d=>{const p=find('leetcode',d.id);form('Edit problem',[...lcF_,{k:'mistake',label:'Made a mistake?',type:'select',opts:[['false','No'],['true','Yes']]}],p,o=>Object.assign(p,o,{num:+o.num,mistake:o.mistake==='true'}),del('leetcode',d.id))},
   lcRound:()=>{if(confirm(`Start a new revision round? The ✓ marks reset (practice counts are kept). Last round: ${lcRevised()}/${S.leetcode.length} revised.`)){S.lcRound=today();save();render()}},
   /* notes */
-  nView:d=>{nView=d.v;nOpen=false;noteMode=d.v==='journal'?'edit':noteMode;view==='notes'?render():go('notes')},
-  nSrc:d=>{nSrc=d.v;render()},
-  nPick:d=>{nSubj=d.s;nTopic=d.t;nType='all';nOpen=false;render()},
-  nType:d=>{nType=d.v;render()},
+  nView:d=>{nShow=30;nView=d.v;nOpen=false;noteMode=d.v==='journal'?'edit':noteMode;view==='notes'?render():go('notes')},
+  nSrc:d=>{nShow=30;nSrc=d.v;render()},
+  nPick:d=>{nShow=30;nSubj=d.s;nTopic=d.t;nType='all';nOpen=false;render()},
+  nType:d=>{nShow=30;nType=d.v;render()},
   nSort:d=>{nSort=d.v;render()},
   nm:d=>{noteMode=d.m;render()},
   openNote:d=>{noteId=d.id;nOpen=true;render();if(innerWidth<=980)scrollTo(0,0)},
   nBack:()=>{nOpen=false;render()},
   openCode:d=>{const c=ghIdx?.code?.find(x=>x.id===d.id);if(!c)return;codeId=c.id;if(view!=='notes'||nView!=='code'){cRepo=c.repo;cSec=c.sec;cLang='all';cQ=''}nView='code';nOpen=true;go('notes');if(innerWidth<=980)scrollTo(0,0)},
-  cLang:d=>{cLang=d.v;nOpen=false;render()},
+  cLang:d=>{nShow=30;cLang=d.v;nOpen=false;render()},
   copyCode:d=>{const c=ghIdx?.code?.find(x=>x.id===d.id),t=c&&ghBody[c.sha];if(t==null)return;navigator.clipboard?.writeText(t).then(()=>toast('Copied'),()=>toast('Copy blocked by the browser'))},
   nFocus:()=>{nFocus=!nFocus;localStorage.setItem('opuos.nfocus',nFocus?'1':'');render()},
   ghNotes:()=>{toast('Reading your GitHub repos…');loadGhNotes(true)},

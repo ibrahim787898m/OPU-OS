@@ -24,7 +24,7 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 | **Review** | Spaced repetition. Corrected quiz questions and LeetCode mistakes come back after 1 → 3 → 7 → 14 → 30 → 60 days. *Got it* / *Again* / *Retire*, a daily limit for new items, and my own review items. |
 | **Quizzes** | First-attempt scores read automatically from each quiz file (`First attempt: 9/10`), shown as **collapsible topic rows** with average, a mini trend of each quiz's score, and badges (unfinished, to review). Filter by subject, sort by course order or weakest first, and expand or collapse all. Topics with an unfinished quiz open by themselves. Quizzes without a score line can be scored by hand. |
 | **Roadmap** | Numbered roadmap steps by track (DSA, Foundations, Math, Courses…) with phase, difficulty and links. A "Next up" banner, plus **suggestions from my repos**: steps that have notes on GitHub but are still marked *todo*. |
-| **LeetCode** | Every solved problem with difficulty, pattern, key insight and a link to my solution. A ✓ marks it revised in the current revision round, and filters show not revised, revisit and mistakes. |
+| **LeetCode** | Every solved problem with difficulty, pattern, key insight and a link to my solution, grouped into **collapsible rows by pattern** (with revised x/y, mistakes, revisit). A search box finds any problem instantly. A ✓ marks it revised in the current revision round, and filters show not revised, revisit and mistakes. |
 | **Sessions** | Logged study sessions (from the focus timer or added by hand), grouped into **collapsible weeks** with total time, problems and a Mon–Sun mini chart. This week opens by itself, older weeks load 8 at a time, and track chips filter by subject. |
 
 **Weekly plans arrive automatically:** a small GitHub Action in a separate private repo copies the latest Notion "Week of …" pages into a secret Gist every 30 minutes. OPU/OS picks them up when it opens. New weeks are added, and mid-week edits update the plan while keeping ticks and review answers. Pasting still works as a fallback (**+ Add weekly plan**: open the page in Notion, press Ctrl+A then Ctrl+C, then paste).
@@ -44,6 +44,7 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 - **Ctrl+K command palette**: jump anywhere, run actions, and search *inside* every note
 - **Focus timer** (25 / 50 / 90 min) that logs a study session when it ends
 - **Skills, Projects, Career** (job pipeline board with follow-up reminders), **GitHub** stats and **Presence** links
+- **Long lists stay short**: Review shows 10 at a time, Notes/Code/Journal lists load 30 at a time, the Roadmap folds finished steps, and each Career column shows its 6 latest cards (with "show more" everywhere).
 - **Keyboard shortcuts**: 1–9 switch sections, `[` collapses or expands the sidebar
 - **Collapsible sidebar**: shrink it to an icon strip (the choice is remembered) to give the 3-column Notes view more room
 - **Mobile friendly**: a top bar with a ☰ menu drawer; on phones, Notes shows the list *or* the open note (with a Back button), and stat cards and tabs resize to fit
