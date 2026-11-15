@@ -462,7 +462,9 @@ function migrate(){
   S.plans??=[];S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
   S.notes.forEach(n=>{n.tags??=[];n.subject??='';n.topic??='';if(n.type==='journal')n.date??=dstr(new Date(n.updated||Date.now()))});
 }
-function save(quiet){if(!quiet)S._t=Date.now();localStorage.setItem(KEY,JSON.stringify(S));if(!quiet)schedulePush()}
+function save(quiet){if(!quiet)S._t=Date.now();
+  try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('⚠ Browser storage is full — this change was NOT saved here. Export a backup now.');return}
+  if(!quiet)schedulePush()}
 
 /* ---------------- cloud sync (private GitHub Gist) ----------------
    Gist file opuos.json = {v, savedAt, hash, data}. Token + gist id live in
@@ -536,13 +538,28 @@ async function connectSync(token){
     toast('Cloud sync connected');render();
   }catch(e){setSync('err',e.message);toast(e.message)}
 }
-function setSync(s,msg=''){syncSt={s,at:Date.now(),msg};const el=$('#syncInd');if(!el)return;
+function setSync(s,msg=''){syncSt={s,at:Date.now(),msg};if(s==='ok'&&syncCfg()?.gistId)localStorage.setItem('opuos.lastsync',String(Date.now()));const el=$('#syncInd');if(!el)return;
   el.className='sync '+s;el.title=msg;
   el.innerHTML='<span>☁</span><span class="lb">'+{off:'local only',pending:'unsaved changes…',busy:'<span class="pulse">syncing…</span>',ok:'synced',err:'sync error — see Settings'}[s]+'</span>';
   const d=$('#syncDetail');if(d)d.textContent=s==='err'?msg:s==='ok'?'Last synced '+new Date().toLocaleTimeString():'';}
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&unlocked)pullGist()});
 window.addEventListener('beforeunload',e=>{if(pushT){pushGist();e.preventDefault();e.returnValue=''}});
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),1800)}
+
+/* ---------------- storage safety ----------------
+   Ask the browser to keep THIS site's storage (it then won't auto-delete it when the
+   device is low on space). Users can still clear it themselves. Asked once per device. */
+let persistSt=null; // true / false / null (unsupported)
+async function checkPersist(ask){
+  if(!navigator.storage?.persisted){persistSt=null;return}
+  persistSt=await navigator.storage.persisted();
+  if(!persistSt&&(ask||!localStorage.getItem('opuos.persistAsked'))){localStorage.setItem('opuos.persistAsked','1');persistSt=await navigator.storage.persist().catch(()=>false)}
+  if(view==='settings')render();
+}
+const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent),isStandalone=matchMedia('(display-mode: standalone)').matches||navigator.standalone;
+const daysSince=d=>d?Math.floor((Date.now()-new Date(d+'T00:00'))/864e5):null;
+const backupDue=()=>{const n=daysSince(S.lastBackup),snooze=localStorage.getItem('opuos.snooze');return (n==null||n>=14)&&!(snooze&&snooze>today())};
+const kb=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.max(1,Math.round(n/1024))+' KB';
 
 /* ---------------- cloud version history (every sync is a Gist revision) ---------------- */
 const vSummary=d=>`${(d.sessions||[]).length} sessions · ${(d.reviewLog||[]).length} reviews done · ${(d.notes||[]).filter(n=>n.type==='journal').length} journal · ${(d.plans||[]).length} plans`;
@@ -609,7 +626,7 @@ function initLock(){
   };
   if(ready&&sessionStorage.getItem(SKEY))enter();
 }
-function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');go(location.hash.slice(1)||'dash');renderTimer();checkSite();pullGist().then(()=>{if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)})}
+function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');go(location.hash.slice(1)||'dash');renderTimer();checkSite();checkPersist();pullGist().then(()=>{if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)})}
 function lock(){sessionStorage.removeItem(SKEY);location.reload()}
 
 /* ---------------- stats helpers ---------------- */
@@ -643,6 +660,7 @@ function dash(){
     <div class="muted" style="margin-top:6px">${doing.length?`Currently on: ${doing.map(d=>esc(d.title)).join(' · ')}`:nx?`Next up: Step ${nx.step} · ${esc(nx.title)}`:'Pick something from your roadmap to start today.'}</div></div>
     <div class="chips"><button class="btn" data-act="logSession">+ Log session</button><button class="btn" data-act="addJob">+ Application</button><button class="btn pri" data-act="timerStart" data-m="25">▶ Focus 25</button></div>
   </div>
+  ${backupDue()?`<div class="banner" style="border-color:rgba(255,198,92,.35);background:rgba(255,198,92,.08)"><span>${I('down')} ${S.lastBackup?`Last backup was <b>${daysSince(S.lastBackup)} days ago</b>.`:'You haven\'t exported a backup yet.'} ${syncCfg()?.gistId?'Cloud sync is on, but a file backup protects you even if the Gist is lost.':'Cloud sync is off, so this browser holds your only copy.'}</span><span class="chips"><button class="btn sm pri" data-act="export">Export backup</button><button class="btn sm ghost" data-act="snooze">Later</button></span></div>`:''}
   <div class="g g4">
     <div class="card stat"><div class="label">This week</div><div class="v">${(wm/60).toFixed(1)}<small> / ${S.settings.weeklyGoal}h</small></div><div class="meter"><i style="width:${Math.min(100,wm/goal*100)}%"></i></div></div>
     <div class="card stat"><div class="label">Study streak</div><div class="v">${streak()}<small> day${streak()===1?'':'s'}</small></div><div class="k faint mono" style="font-size:12px">${hm(S.sessions.reduce((a,s)=>a+(+s.minutes||0),0))} all-time</div></div>
@@ -1424,6 +1442,14 @@ function settings(){
       :`<ol class="steps"><li><a href="https://github.com/settings/tokens/new?scopes=gist&description=OPU%2FOS%20sync" target="_blank" rel="noopener">Create a GitHub token ↗</a> with <b>only</b> the <code>gist</code> scope</li><li>Paste it below and connect</li></ol>
         <div class="field"><input id="sTok" type="password" placeholder="ghp_…" autocomplete="off"></div><button class="btn pri" data-act="syncOn">Connect sync</button>
         <div class="faint mono" id="syncDetail" style="font-size:12px;margin-top:10px"></div>`}</div>
+      <div class="card"><h3>Storage &amp; backups</h3>${(()=>{const size=(localStorage.getItem(KEY)||'').length*2,ls=+localStorage.getItem('opuos.lastsync')||0,bd=daysSince(S.lastBackup);
+        const row=(k,v)=>`<div class="li" style="padding:7px 0"><div class="grow muted" style="font-size:14px">${k}</div><div class="mono" style="font-size:12.5px;text-align:right">${v}</div></div>`;
+        return `<div class="list">${row('Keep data on this device',persistSt===true?'<span style="color:var(--acc)">● persistent</span>':persistSt===false?`<span style="color:var(--amber)">○ not granted</span> <button class="btn sm" data-act="persist">Ask again</button>`:'<span class="faint">not supported here</span>')}
+          ${row('Data size',`${kb(size)} <span class="faint">of ~5 MB</span>`)}
+          ${row('Last cloud sync',syncCfg()?.gistId?(ls?ago(new Date(ls).toISOString()):'—'):'<span style="color:var(--amber)">sync off</span>')}
+          ${row('Last file backup',S.lastBackup?`${fmtDate(S.lastBackup)} <span class="faint">(${bd} day${bd===1?'':'s'} ago)</span>`:'<span style="color:var(--amber)">never</span>')}</div>
+          ${isIOS&&!isStandalone?`<div class="banner" style="margin:12px 0 0;font-size:13px">On iPhone, Safari deletes site data after 7 days without a visit. Tap Share → <b>Add to Home Screen</b> and open OPU/OS from there to avoid it.</div>`:''}
+          <div class="faint" style="font-size:12px;margin-top:10px">"Persistent" means the browser won't delete this site's data by itself when space runs low. Clearing site data yourself still removes it, so keep sync on and export now and then.</div>`})()}</div>
       <div class="card"><h3>Data</h3><div class="chips"><button class="btn" data-act="export">${I('down')} Export JSON</button><button class="btn" data-act="import">${I('up')} Import JSON</button><button class="btn danger" data-act="reset">Reset everything</button></div><input type="file" id="impFile" accept=".json" style="display:none">
         <div class="faint" style="font-size:12px;margin-top:10px">Import accepts a full backup (replaces everything) or a Notion import file (merges: roadmap, weekly plans, notes, LeetCode).</div></div>
       <div class="card"><h3>Security</h3><div class="muted" style="font-size:14px">Owner-only lock: only your passphrase opens this app, in any browser. To change it, run <code>python3 tools/set_owner.py</code> in the repo and push.</div>
@@ -1543,10 +1569,12 @@ const A={
   delJ:()=>{if(confirm('Delete this journal entry?')){S.notes=S.notes.filter(n=>n.id!==jId);jId=null;save();render()}},
   saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github,repos=$('#sRepos').value.split(',').map(x=>x.trim()).filter(Boolean),crepos=$('#sCode').value.split(',').map(x=>x.trim()).filter(Boolean);Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20,noteRepos:repos,codeRepos:crepos});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite();loadGhNotes(true)},
   history:historyModal,
+  snooze:()=>{localStorage.setItem('opuos.snooze',addDays(today(),3));render()},
+  persist:()=>checkPersist(true).then(()=>toast(persistSt?'Browser will keep this data':'Browser said no — keep sync on and export backups')),
   syncOn:()=>{const t=$('#sTok').value.trim();if(t)connectSync(t)},
   syncNow:async()=>{await pullGist();if(syncSt.s!=='err')await pushGist();toast(syncSt.s==='err'?syncSt.msg:'Synced')},
   syncOff:()=>{if(confirm('Disconnect cloud sync on this browser? (Your Gist is kept.)')){localStorage.removeItem(SYNC);setSync('off');render()}},
-  export:()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download=`opuos-backup-${today()}.json`;a.click()},
+  export:()=>{S.lastBackup=today();save();localStorage.removeItem('opuos.snooze');if(['dash','settings'].includes(view))render();const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download=`opuos-backup-${today()}.json`;a.click()},
   import:()=>{const f=$('#impFile');f.onchange=()=>{const r=new FileReader();r.onload=()=>{let d;try{d=JSON.parse(r.result)}catch(e){return toast('Invalid file')}
       if(d.opuosImport)return mergeImport(d);
       if(!d.settings)return toast('Invalid file');
