@@ -51,11 +51,11 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 ---
 
 ## Data & privacy
-- Data is saved in the browser (`localStorage`). Optional **cloud sync** saves it to a *private* GitHub Gist, so another browser can restore it from the lock screen.
+- Data is saved in the browser (`localStorage`). Optional **cloud sync** saves it to a *secret* GitHub Gist, so another browser can restore it from the lock screen. A secret Gist is **unlisted, not private**: it doesn't appear on the profile or in search, but anyone with its exact link could open it, and the data isn't encrypted. The link has a long random ID, so it can't realistically be guessed. Just never share it.
 - **Storage safety:** the app asks the browser to keep its data (persistent storage), shows data size and last sync/backup in Settings, and reminds you to export a backup every 14 days.
 - **Export / Import JSON** in Settings: a full backup (replaces everything) or a Notion import file (merges roadmap, weekly plans, notes and LeetCode, and never duplicates).
 - **Owner-only lock:** only the owner's passphrase opens the app, in any browser, and visitors can't create their own. The code holds only a salted PBKDF2-SHA256 hash (600,000 rounds), never the passphrase. To set or change it, run `python3 tools/set_owner.py` and push.
-- The code is public, so the lock keeps people out of the interface but doesn't encrypt anything. That's fine because no personal data is in the code: it lives in the owner's browser and private Gist.
+- The code is public, so the lock keeps people out of the interface but doesn't encrypt anything. That's fine because no personal data is in the code: it lives in the owner's browser and secret (unlisted) Gist.
 - Personal data never goes in this repo; it only holds the app's code.
 
 ---
