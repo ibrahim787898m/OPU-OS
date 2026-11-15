@@ -603,7 +603,7 @@ async function checkAutoPlans(force){
       if(!id){planChk={at:Date.now(),msg:'not set up yet',busy:false};if(view==='study')render();return}
       localStorage.setItem('opuos.plangist',id);g=await ghApi('gists/'+id)}
     const f=g.files[PGF],d=JSON.parse(f.truncated?await fetch(f.raw_url).then(r=>r.text()):f.content);
-    const n=mergeAutoPlans(d.plans||[]);
+    const n=mergeAutoPlans(d.plans||[],d.history||[]);
     planChk={at:Date.now(),msg:n?`${n} plan${n>1?'s':''} updated`:'up to date',gen:d.generated,busy:false};
   }catch(e){planChk={at:Date.now(),msg:e.message,busy:false}}
   if(view==='study'||view==='dash')render();
@@ -618,8 +618,14 @@ function notionTicks(p,tasks){
     if(use.length&&use.every(t=>/^done$/i.test(t.status))){d.done=true;d.nDone=true}
   });
 }
-function mergeAutoPlans(list){
+function mergeAutoPlans(list,history=[]){
   let changed=0;const added=[];
+  // older weeks: the Gist carries only their task statuses; tick the plans already here
+  for(const h of history){
+    const p=S.plans.find(x=>x.week===h.week),key=JSON.stringify(h.tasks||[]);
+    if(!p||p.srcTaskKey===key)continue;
+    notionTicks(p,h.tasks);p.srcTaskKey=key;changed++;
+  }
   for(const r of list){
     if(!r?.week||!r.md)continue;
     const i=S.plans.findIndex(x=>x.week===r.week),old=S.plans[i],key=r.md+'\u0000'+JSON.stringify(r.tasks||[]);
