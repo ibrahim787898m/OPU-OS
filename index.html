@@ -984,7 +984,7 @@ function parseQuiz(t){
   const num=s=>+s;
   const fa=t.match(/first attempt:\s*([\d.]+)\s*\/\s*([\d.]+)/i),rd=t.match(/redo[^:\n]*:\s*([\d.]+)\s*\/\s*([\d.]+)/i);
   const head=t.split('\n').slice(0,14).join('\n');
-  const cl=head.split('\n').filter(l=>/corrected/i.test(l)&&!/first attempt and the corrected/i.test(l)).join(' ');
+  const cl=head.split('\n').filter(l=>/corrected|needs review/i.test(l)&&!/first attempt and the corrected/i.test(l)).join(' '); // both feed the review queue
   const corrected=[...new Set(cl.match(/Q\d+(?:\([a-z]\))?/g)||[])];
   // Question text: math quizzes put it in the heading ("## Q3. Simplify…", "### (b) …");
   // DSA quizzes put it in a bold line under "## Q3". Code blocks are skipped.
