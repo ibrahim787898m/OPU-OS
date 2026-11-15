@@ -724,7 +724,7 @@ function dash(){
     <div class="card stat clickable" data-act="studyTab" data-t="leetcode"><div class="label">LeetCode solved</div><div class="v">${S.leetcode.length||solved()}</div><div class="k faint mono" style="font-size:12px">${S.leetcode.length?`revised ${lcRevised()}/${S.leetcode.length} this round`:`DSA roadmap ${pct('DSA')}%`}</div></div>
 
     <div class="card stat"><div class="label">Active applications</div><div class="v">${active}</div><div class="k faint mono" style="font-size:12px">${S.jobs.filter(j=>j.status==='interview').length} interviewing</div></div>
-    <div class="card" style="grid-column:1/-1"><h3><span>Today${p?` · ${esc(p.title||'Week of '+fmtDate(p.week))}`:''}</span><span class="chips">${reviewQueue().fin.length?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().fin.length} quiz${reviewQueue().fin.length===1?'':'zes'} to finish →</button>`:''}${reviewQueue().show.length-reviewQueue().fin.length>0?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().show.length-reviewQueue().fin.length} review${reviewQueue().show.length-reviewQueue().fin.length===1?'':'s'} due →</button>`:''}<button class="btn sm ghost" data-act="studyTab" data-t="week">Weekly plan →</button></span></h3>
+    <div class="card" style="grid-column:1/-1"><h3><span>Today${p?` · ${esc(p.title||'Week of '+fmtDate(p.week))}`:''}</span><span class="chips">${quizReady()?`${reviewQueue().fin.length?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().fin.length} quiz${reviewQueue().fin.length===1?'':'zes'} to finish →</button>`:''}${reviewQueue().show.length-reviewQueue().fin.length>0?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().show.length-reviewQueue().fin.length} review${reviewQueue().show.length-reviewQueue().fin.length===1?'':'s'} due →</button>`:''}`:`<button class="btn sm" data-act="studyTab" data-t="review">Reviews …</button>`}<button class="btn sm ghost" data-act="studyTab" data-t="week">Weekly plan →</button></span></h3>
       ${td?`<div style="display:flex;gap:12px;align-items:flex-start"><button class="ck ${td.d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${td.i}">✓</button><div><div><strong>${esc(td.d.day)}</strong> <span class="pill" style="margin-left:6px">${esc(td.d.focus||'—')}</span></div><div style="margin-top:6px">${inl(esc(td.d.plan))}</div></div></div>`
       :p?`<div class="empty">Nothing planned for today in this week's plan.</div>`:`<div class="empty">No weekly plan yet. <button class="btn sm" data-act="pastePlan">+ Add weekly plan</button></div>`}
     </div>
@@ -772,7 +772,7 @@ let studyTrack=null,studyTab='week',planId=null,lcF='all';
 const stepSort=(a,b)=>(a.step??1e9)-(b.step??1e9);
 const nextUp=()=>S.roadmap.filter(r=>r.status!=='done'&&r.step!=null&&r.step<100).sort(stepSort)[0];
 function study(){
-  const rq=reviewQueue().show.length,tabs=[['week','This week'],['review','Review'+(rq?` <span class="mono" style="color:var(--amber)">${rq}</span>`:'')],['quizzes','Quizzes'],['roadmap','Roadmap'],['leetcode','LeetCode'],['sessions','Sessions']];
+  const rq=quizReady()?reviewQueue().show.length:'…',tabs=[['week','This week'],['review','Review'+(rq?` <span class="mono" style="color:var(--amber)">${rq}</span>`:'')],['quizzes','Quizzes'],['roadmap','Roadmap'],['leetcode','LeetCode'],['sessions','Sessions']];
   const btns={week:`${syncCfg()?.token?`<button class="btn" data-act="planCheck" title="Check the Notion plans Gist now">${I('refresh')} Check for new plan</button>`:''}<button class="btn pri" data-act="pastePlan">+ Add weekly plan</button>`,
     roadmap:`<button class="btn" data-act="addStep">+ Roadmap item</button>`,
     review:`<button class="btn pri" data-act="rvAdd">+ Review item</button>`,
@@ -1012,11 +1012,16 @@ function parseQuiz(t){
   for(const k in prompts)prompts[k]=prompts[k].replace(/\*\*/g,'').slice(0,240);
   return {score:fa?num(fa[1]):null,outOf:fa?num(fa[2]):null,redo:rd?num(rd[1]):null,corrected,unfinished,prompts};
 }
+/* Parsed quiz info is cached by file sha ("opuos.quizcache"), so the review count and
+   scores are right as soon as the app opens; GitHub is still re-read in the background. */
+const QC=(()=>{try{return JSON.parse(localStorage.getItem('opuos.quizcache'))||{}}catch(e){return {}}})();
+function saveQuizCache(){const keep={};(ghIdx?.items||[]).forEach(n=>{if(n.type==='quiz'&&QC[n.sha])keep[n.sha]=QC[n.sha]});try{localStorage.setItem('opuos.quizcache',JSON.stringify(keep))}catch(e){}}
+const quizReady=()=>!!ghIdx&&ghIdx.items.filter(n=>n.type==='quiz').every(n=>ghBody[n.sha]!=null||QC[n.sha]);
 function quizList(){
   return (ghIdx?.items||[]).filter(n=>n.type==='quiz').map(n=>{
-    const t=ghBody[n.sha],q=t!=null?parseQuiz(t):{score:null,outOf:null,corrected:[],unfinished:[],prompts:{}},m=S.quizManual?.[n.id];
+    const t=ghBody[n.sha],q=t!=null?(QC[n.sha]=parseQuiz(t)):QC[n.sha]||{score:null,outOf:null,corrected:[],unfinished:[],prompts:{}},m=S.quizManual?.[n.id];
     const score=q.score??(m?+m.score:null),outOf=q.outOf??(m?+m.outOf||10:null);
-    return {n,loaded:t!=null,unfinished:q.unfinished||[],manual:q.score==null&&!!m,score,outOf,pctv:score!=null&&outOf?Math.round(score/outOf*100):null,redo:q.redo,corrected:q.score!=null?q.corrected:(m?.corrected||'').match(/Q\d+(?:\([a-z]\))?/g)||[],prompts:q.prompts};
+    return {n,loaded:t!=null||!!QC[n.sha],unfinished:q.unfinished||[],manual:q.score==null&&!!m,score,outOf,pctv:score!=null&&outOf?Math.round(score/outOf*100):null,redo:q.redo,corrected:q.score!=null?q.corrected:(m?.corrected||'').match(/Q\d+(?:\([a-z]\))?/g)||[],prompts:q.prompts};
   }).sort((a,b)=>a.n.subject.localeCompare(b.n.subject)||a.n.tkey.localeCompare(b.n.tkey,undefined,{numeric:true})||a.n.title.localeCompare(b.n.title,undefined,{numeric:true}));
 }
 const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null;
@@ -1235,7 +1240,7 @@ async function ghText(n){
   if(!r.ok)throw new Error('Could not load this file ('+r.status+')');
   return ghBody[n.sha]=await r.text();
 }
-const ghLoadAll=()=>ghIdx?(ghAllP||=Promise.all(ghIdx.items.map(n=>ghText(n).catch(()=>''))).then(()=>{if(['notes','study','dash'].includes(view))render()})):Promise.resolve();
+const ghLoadAll=()=>ghIdx?(ghAllP||=Promise.all(ghIdx.items.map(n=>ghText(n).catch(()=>''))).then(()=>{quizList();saveQuizCache();if(['notes','study','dash'].includes(view))render()})):Promise.resolve();
 
 /* ---------------- CODE FROM GITHUB (read-only) ----------------
    Code files from the "code repos" (Settings). cs50x is left out on purpose:
