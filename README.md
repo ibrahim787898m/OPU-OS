@@ -27,7 +27,7 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 | **LeetCode** | Every solved problem with difficulty, pattern, key insight and a link to my solution. A ✓ marks it revised in the current revision round, and filters show not revised, revisit and mistakes. |
 | **Sessions** | Logged study sessions (from the focus timer or added by hand). |
 
-**Adding a weekly plan:** open the week's page in Notion, press Ctrl+A then Ctrl+C, and paste it into **+ Add weekly plan**. The formatted page (headings, numbered lists, the day-by-day table) is converted automatically, and plain-text pastes work too.
+**Weekly plans arrive automatically:** a small GitHub Action in a separate private repo copies the latest Notion "Week of …" pages into a secret Gist every 4 hours. OPU/OS picks them up when it opens. New weeks are added, and mid-week edits update the plan while keeping ticks and review answers. Pasting still works as a fallback (**+ Add weekly plan**: open the page in Notion, press Ctrl+A then Ctrl+C, then paste).
 
 ### Notes & Journal
 - **Course notes are read live from GitHub** (my `math`, `dsa` and `cs50x` repos). Each file is sorted by its folder path:
@@ -61,7 +61,6 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 ---
 
 ## Upcoming features
-- **Automatic Sunday plan:** the Sunday planner also saves each new plan to a private GitHub repo, and OPU/OS loads it automatically, with no copy-paste.
 - **Sync back to Notion:** today data only flows *into* OPU/OS. Roadmap status changes and LeetCode revisions made here don't reach Notion, so the Sunday planner can't see them yet. Planned options:
   1. a weekly "sync to Notion" step done with Claude, or
   2. full two-way sync through a small serverless proxy (for example, a Cloudflare Worker) that holds the Notion key safely.

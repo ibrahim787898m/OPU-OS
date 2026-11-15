@@ -542,7 +542,7 @@ function setSync(s,msg=''){syncSt={s,at:Date.now(),msg};if(s==='ok'&&syncCfg()?.
   el.className='sync '+s;el.title=msg;
   el.innerHTML='<span>☁</span><span class="lb">'+{off:'local only',pending:'unsaved changes…',busy:'<span class="pulse">syncing…</span>',ok:'synced',err:'sync error — see Settings'}[s]+'</span>';
   const d=$('#syncDetail');if(d)d.textContent=s==='err'?msg:s==='ok'?'Last synced '+new Date().toLocaleTimeString():'';}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&unlocked)pullGist()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&unlocked)pullGist().then(()=>checkAutoPlans())});
 window.addEventListener('beforeunload',e=>{if(pushT){pushGist();e.preventDefault();e.returnValue=''}});
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),1800)}
 
@@ -587,6 +587,46 @@ async function historyModal(){
   }catch(err){$('#hist').innerHTML=`<div class="empty" style="color:var(--red)">${esc(err.message)}</div>`}
 }
 
+/* ---------------- automatic weekly plans ----------------
+   A GitHub Action (private repo "opuos-automation") copies the latest Notion "Week of …"
+   pages into a secret Gist file opuos-weekly-plans.json. The app reads it with the sync
+   token, adds new weeks and updates edited ones (keeping ticks and review answers). */
+const PGF='opuos-weekly-plans.json';let planChk={at:0,msg:'',busy:false};
+async function checkAutoPlans(force){
+  const c=syncCfg();if(!c?.token||planChk.busy||!S)return;
+  if(!force&&Date.now()-planChk.at<15*6e4)return;
+  planChk={...planChk,busy:true};if(view==='study')render();
+  try{
+    let id=localStorage.getItem('opuos.plangist'),g=null;
+    if(id){try{g=await ghApi('gists/'+id)}catch(e){id=null}}
+    if(!id){for(let pg=1;pg<=5&&!id;pg++){const l=await ghApi(`gists?per_page=100&page=${pg}`);const f=l.find(x=>x.files&&x.files[PGF]);if(f)id=f.id;if(l.length<100)break}
+      if(!id){planChk={at:Date.now(),msg:'not set up yet',busy:false};if(view==='study')render();return}
+      localStorage.setItem('opuos.plangist',id);g=await ghApi('gists/'+id)}
+    const f=g.files[PGF],d=JSON.parse(f.truncated?await fetch(f.raw_url).then(r=>r.text()):f.content);
+    const n=mergeAutoPlans(d.plans||[]);
+    planChk={at:Date.now(),msg:n?`${n} plan${n>1?'s':''} updated`:'up to date',gen:d.generated,busy:false};
+  }catch(e){planChk={at:Date.now(),msg:e.message,busy:false}}
+  if(view==='study'||view==='dash')render();
+}
+function mergeAutoPlans(list){
+  let changed=0;const added=[];
+  for(const r of list){
+    if(!r?.week||!r.md)continue;
+    const i=S.plans.findIndex(x=>x.week===r.week),old=S.plans[i];
+    if(old&&old.srcMd===r.md)continue; // unchanged since last time
+    const p=parsePlan(r.md,r.week);Object.assign(p,{url:r.url||old?.url,srcMd:r.md,auto:true});if(r.title)p.title=r.title;
+    if(old){p.id=old.id;p.added=old.added;
+      p.days.forEach(x=>{const o=old.days.find(y=>y.day===x.day);if(o)x.done=o.done});
+      p.outcomes.forEach((x,k)=>{if(old.outcomes[k])x.done=old.outcomes[k].done});
+      p.review.forEach(x=>{const o=old.review.find(y=>y.q===x.q);if(o?.a&&!x.a)x.a=o.a});
+      S.plans[i]=p}
+    else{S.plans.push(p);added.push(p.title)}
+    changed++;
+  }
+  if(changed){save();if(added.length)toast('New weekly plan: '+added.join(', '))}
+  return changed;
+}
+
 /* ---------------- lock ---------------- */
 /* Owner-only lock. The code holds only a slow, salted PBKDF2 hash of the owner's passphrase —
    never the passphrase. Set or change it with tools/set_owner.py, then push. Visitors can't
@@ -626,7 +666,7 @@ function initLock(){
   };
   if(ready&&sessionStorage.getItem(SKEY))enter();
 }
-function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');go(location.hash.slice(1)||'dash');renderTimer();checkSite();checkPersist();pullGist().then(()=>{if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)})}
+function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');go(location.hash.slice(1)||'dash');renderTimer();checkSite();checkPersist();pullGist().then(()=>{checkAutoPlans();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)})}
 function lock(){sessionStorage.removeItem(SKEY);location.reload()}
 
 /* ---------------- stats helpers ---------------- */
@@ -716,7 +756,7 @@ const stepSort=(a,b)=>(a.step??1e9)-(b.step??1e9);
 const nextUp=()=>S.roadmap.filter(r=>r.status!=='done'&&r.step!=null&&r.step<100).sort(stepSort)[0];
 function study(){
   const rq=reviewQueue().show.length,tabs=[['week','This week'],['review','Review'+(rq?` <span class="mono" style="color:var(--amber)">${rq}</span>`:'')],['quizzes','Quizzes'],['roadmap','Roadmap'],['leetcode','LeetCode'],['sessions','Sessions']];
-  const btns={week:`<button class="btn pri" data-act="pastePlan">+ Add weekly plan</button>`,
+  const btns={week:`${syncCfg()?.token?`<button class="btn" data-act="planCheck" title="Check the Notion plans Gist now">${I('refresh')} Check for new plan</button>`:''}<button class="btn pri" data-act="pastePlan">+ Add weekly plan</button>`,
     roadmap:`<button class="btn" data-act="addStep">+ Roadmap item</button>`,
     review:`<button class="btn pri" data-act="rvAdd">+ Review item</button>`,
     quizzes:`<button class="btn" data-act="ghNotes">${I('refresh')} Re-read GitHub</button>`,
@@ -823,7 +863,8 @@ function studyWeek(){
     <div class="card stat"><div class="label">Plan</div><div class="v">${dd}<small>/${p.days.length} days</small></div><div class="faint mono" style="font-size:11px;margin-top:6px">${od}/${p.outcomes.length} outcomes</div></div>
     <div class="card stat clickable" data-act="studyTab" data-t="leetcode"><div class="label">LeetCode revised</div><div class="v">${lcw}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${lcRevised()}/${S.leetcode.length} this round</div></div>
     <div class="card stat clickable" data-act="studyTab" data-t="review"><div class="label">Reviews done</div><div class="v">${reviewsBetween(p.week,we)}</div><div class="faint mono" style="font-size:11px;margin-top:6px">${reviewQueue().show.length} due now</div></div></div>`;
-  return `${strip}${nextP&&nextP.id!==p.id?`<div class="banner"><span>📅 Next week's plan is ready: <strong>${esc(nextP.title)}</strong></span><button class="btn sm" data-act="openPlan" data-id="${nextP.id}">View →</button></div>`:''}
+  const auto=syncCfg()?.token?`<div class="faint mono" style="font-size:11px;margin:-8px 0 12px">Auto plans from Notion: ${planChk.busy?'<span class="pulse">checking…</span>':esc(planChk.msg||'—')}${planChk.at&&!planChk.busy?' · checked '+ago(new Date(planChk.at).toISOString()):''}${p.auto?' · this plan came in automatically':''}</div>`:'';
+  return `${auto}${strip}${nextP&&nextP.id!==p.id?`<div class="banner"><span>📅 Next week's plan is ready: <strong>${esc(nextP.title)}</strong></span><button class="btn sm" data-act="openPlan" data-id="${nextP.id}">View →</button></div>`:''}
   ${!isCur&&p.week<ws&&!nextP?`<div class="banner" style="border-color:rgba(255,198,92,.35);background:rgba(255,198,92,.08)"><span>No plan for this week yet — showing the latest one.</span><button class="btn sm" data-act="pastePlan">+ Add this week's plan</button></div>`:''}
   <div class="g g3">
     <div class="card span2"><h3><span>${esc(p.title)}${isCur?' <span class="pill done" style="margin-left:6px">this week</span>':''}</span>
@@ -1569,6 +1610,7 @@ const A={
   delJ:()=>{if(confirm('Delete this journal entry?')){S.notes=S.notes.filter(n=>n.id!==jId);jId=null;save();render()}},
   saveSettings:()=>{const g=$('#sGh').value.trim(),ch=g!==S.settings.github,repos=$('#sRepos').value.split(',').map(x=>x.trim()).filter(Boolean),crepos=$('#sCode').value.split(',').map(x=>x.trim()).filter(Boolean);Object.assign(S.settings,{name:$('#sName').value,github:g,site:$('#sSite').value,weeklyGoal:+$('#sGoal').value||20,noteRepos:repos,codeRepos:crepos});if(ch)S.gh=null;save();toast('Saved');if(ch&&g)syncGH();checkSite();loadGhNotes(true)},
   history:historyModal,
+  planCheck:()=>checkAutoPlans(true),
   snooze:()=>{localStorage.setItem('opuos.snooze',addDays(today(),3));render()},
   persist:()=>checkPersist(true).then(()=>toast(persistSt?'Browser will keep this data':'Browser said no — keep sync on and export backups')),
   syncOn:()=>{const t=$('#sTok').value.trim();if(t)connectSync(t)},

@@ -27,5 +27,8 @@ Test in headless Chrome (`google-chrome --headless=new`):
 - WebCrypto (PBKDF2) hangs under `--virtual-time-budget`. Test the lock in real time instead (have the page POST its results to a local receiver).
 - Never test against the real repo file's `OWNER` hash. Use a copy with a throwaway passphrase.
 
+## Weekly plans automation
+The private repo `~/code/opuos-automation` (GitHub Action, `notion_to_gist.py`) writes the latest Notion plans into the secret Gist file `opuos-weekly-plans.json`. In the app, `checkAutoPlans()` and `mergeAutoPlans()` read it with the sync token (plans are matched by week, and `srcMd` detects changes).
+
 ## Pending (decided "later")
-Automatic Sunday plan through a private repo, sync back to Notion, optional Cloudflare Pages + Access, optional data encryption. Details are in `OPUOS_GUIDE.txt` section 12.
+Sync back to Notion, optional Cloudflare Pages + Access, optional data encryption. Details are in `OPUOS_GUIDE.txt` section 12.
