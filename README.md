@@ -62,12 +62,14 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 ---
 
 ## Upcoming features
-- **Two-way Notion sync (in progress):** browsers can't call Notion directly, and the Notion key must never be in this public code, so a small private Cloudflare Worker holds the key. It can read and update five databases (job applications, roadmap, tasks, LeetCode problems, projects), create new jobs and projects, and never delete anything. Each device connects once in **Settings → Notion sync** (Worker address + sync key, stored only in that browser).
+- **Two-way Notion sync:** browsers can't call Notion directly, and the Notion key must never be in this public code, so a small private Cloudflare Worker holds the key. It can read and update five databases (job applications, roadmap, tasks, LeetCode problems, projects), create new jobs and projects, and never delete anything. Each device connects once in **Settings → Notion sync** (Worker address + sync key, stored only in that browser).
   - Done: the Worker and the Settings connection with a per-database health check.
   - Done: **Career ⇄ Notion job applications.** Jobs found by the daily job-search chat appear on the board with a **NEW** badge, plus why each one fits, its location, pay, type, which résumé to use and links to the posting and the Notion page. Moving a card, editing it or adding a job updates Notion within seconds, and changes made in Notion show up when the app opens or the tab is reopened. Jobs typed into the app before sync are matched by company and role (never duplicated). Skipped jobs are hidden. Deleting a Notion job in the app marks it Skipped there; nothing is ever deleted in Notion. Offline changes wait (⏳) and go out later.
   - Done: **Roadmap ⇄ Notion.** Cycling a step's status (todo → doing → done) or editing its notes updates the Notion Roadmap, so the Sunday planner sees real progress. Status changes made in Notion show up here. Steps added in Notion appear automatically; steps deleted there leave the roadmap. Title, step number and track come from Notion. Steps created only in OPU/OS stay local.
   - Done: **Weekly-plan ticks ⇄ Notion Tasks.** Ticking a day marks that day's task (the one titled with the day, like "Mon 16 — …") Done in Notion, and unticking sets it back to To Do. Notion changes tick or untick the day here. Other tasks on the same date are never changed. Days already ticked before sync were sent to Notion on the first sync.
-  - Next: LeetCode practice and projects.
+  - Done: **LeetCode ⇄ Notion Problems.** Revising a problem updates its practice count in Notion; status and the mistake flag sync both ways; problems added on either side appear on the other (matched by problem number, never duplicated).
+  - Done: **Projects ⇄ Notion portfolio.** Name and link are shared with the Notion "My projects" portfolio, and its tags show on the cards. Status, description and next action stay in OPU/OS. A project made here joins the portfolio only once it's **Shipped**, so planning-stage ideas don't clutter it.
+  - Removing a synced problem or project in OPU/OS removes it here only; it stays in Notion and isn't pulled back.
   - Conflicts are decided field by field: if only one side changed a field, that change wins; if both did, the newer edit wins and the app tells you.
 
 ---

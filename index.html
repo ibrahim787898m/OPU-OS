@@ -474,7 +474,7 @@ function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){} if(!S)S=s
 function migrate(){
   S.settings.noteRepos??=['math','dsa','cs50x'];
   S.settings.codeRepos??=['CS50P','leetcode-solutions','dsa','math']; // cs50x left out on purpose (academic honesty)
-  S.plans??=[];S.ntasks??=[];S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
+  S.plans??=[];S.ntasks??=[];S.nsIgnore??={};S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
   S.notes.forEach(n=>{n.tags??=[];n.subject??='';n.topic??='';if(n.type==='journal')n.date??=dstr(new Date(n.updated||Date.now()))});
 }
 function save(quiet){if(!quiet)S._t=Date.now();
@@ -738,7 +738,40 @@ const NSYNC={
     gone:list=>{S.ntasks=S.ntasks.filter(t=>!list.includes(t))},   // deleted in Notion, or now older than 120 days
     afterMerge:()=>tasksSeed(),
     label:{}},
+  // LeetCode Tracker → Problems. Matched by problem number. Practice count: on first link the
+  // higher count wins (revisions done here before sync aren't lost). Deleted in Notion → removed.
+  leetcode:{arr:'leetcode',map:{num:'num',name:'name',difficulty:'difficulty',pattern:'pattern',status:'status',count:'count',mistake:'mistake',insight:'insight',link:'link'},
+    write:['num','name','difficulty','pattern','insight','link','count','status','mistake'],only:[],urlKey:'nurl',create:true,name:p=>'LC '+p.num,
+    to:(p,a)=>a==='count'?(+p.count||0):a==='mistake'?!!p.mistake:a==='num'?(+p.num||null):nOrNull(p[a]),
+    from:(a,v)=>a==='count'?(+v||0):a==='mistake'?!!v:a==='num'?(+v||0):(v??''),
+    match:(x,r)=>r.f.num!=null&&+x.num===+r.f.num,
+    linkExtra:(x,r)=>(+x.count||0)>(+r.f.count||0)?['count']:[],
+    blank:()=>({num:0,name:'',difficulty:'',pattern:'',status:'Solved',count:0,mistake:false,insight:'',link:'',last:''}),
+    gone:list=>{S.leetcode=S.leetcode.filter(p=>!list.includes(p))},
+    label:{count:'practice count',mistake:'mistake flag'}},
+  // Career → Portfolio → My projects (a portfolio of finished work). Only name + link are shared.
+  // Matched by the part of the name before ":" ("Whisper" = "Whisper: programming language").
+  // A project made here is created in Notion only once it's Shipped.
+  projects:{arr:'projects',map:{name:'name',link:'link'},write:['name','link'],only:['tags'],urlKey:'nurl',create:true,name:p=>p.name,
+    canCreate:p=>p.status==='Shipped',
+    to:(p,a)=>nOrNull(p[a]),from:(a,v)=>v??'',
+    match:(x,r)=>projKey(x.name)===projKey(r.f.name),
+    blank:()=>({name:'',status:'Shipped',desc:'',link:'',next:''}),
+    gone:list=>list.forEach(p=>{delete p.nid;delete p.nd;delete p.nurl;p.nLocal=true}),   // deleted in Notion: keep it here (status, notes…), stop syncing it
+    label:{}},
 };
+const projKey=n=>String(n||'').split(':')[0].trim().toLowerCase();
+/* Is this item waiting to go to Notion? (linked + changed, or new and allowed to be created) */
+function nsPending(kind,x){
+  const K=NSYNC[kind];if(x.gone||x.nLocal)return false;
+  if(x.nid)return !!x.nd;
+  return !!K.create&&(!K.canCreate||K.canCreate(x));
+}
+/* Remove a synced item from OPU/OS only: Notion keeps it, and later pulls skip it. */
+function nsForget(kind,x){
+  const K=NSYNC[kind];if(x.nid){S.nsIgnore[kind]=[...new Set([...(S.nsIgnore[kind]||[]),nidOf(x.nid)])]}
+  S[K.arr]=S[K.arr].filter(y=>y!==x);
+}
 /* A plan day's tasks: same date, title starting with the day label ("Mon 16 — …"). Only those
    are ever written. Other tasks on that date (errands etc.) can only tick a day, never untick it
    or be changed (the old one-way rule). */
@@ -761,10 +794,10 @@ function tasksSeed(){   // first sync only: days already ticked in OPU/OS are se
 }
 const jobsLive=()=>S.jobs.filter(j=>!j.gone&&j.status!=='skipped');
 const safeUrl=u=>/^https?:\/\//i.test(String(u||'').trim())?String(u).trim():'';
-let nsJob={busy:false,at:0,msg:'',err:false},nsT=null;
+let nsJob={busy:false,at:0,msg:'',err:false},nsT=null,nsFailed=false;   // nsFailed: Notion refused a change this run (don't auto-retry)
 const nsSoon=()=>{if(!nsCfg())return;clearTimeout(nsT);nsT=setTimeout(()=>nsSync(),2500)};
 function nsTouch(kind,it,fields){
-  const K=NSYNC[kind];if(!it.nid&&!K.create)return;   // e.g. a roadmap step typed into the app: stays local
+  const K=NSYNC[kind];if(!it.nid&&!nsPending(kind,it))return;   // e.g. a roadmap step typed into the app: stays local
   const f=new Set([...(it.nd?.f||[]),...fields.filter(a=>K.write.includes(a))]);if(!f.size)return;
   it.nd={f:[...f],at:new Date().toISOString()};nsSoon();
 }
@@ -778,10 +811,11 @@ function nsApplyRow(K,it,r,keep=[]){   // copy Notion's values in, except fields
 function nsMerge(kind,rows,full){
   const K=NSYNC[kind];let linked=false;const seen=new Set();
   for(const r of rows){
-    seen.add(r.nid);let it=S[K.arr].find(x=>x.nid&&nidOf(x.nid)===r.nid);
-    if(!it&&K.match){it=S[K.arr].find(x=>!x.nid&&!x.gone&&K.match(x,r));
+    seen.add(r.nid);if((S.nsIgnore[kind]||[]).includes(r.nid))continue;   // removed here on purpose
+    let it=S[K.arr].find(x=>x.nid&&nidOf(x.nid)===r.nid);
+    if(!it&&K.match){it=S[K.arr].find(x=>!x.nid&&!x.gone&&!x.nLocal&&K.match(x,r));
       if(it){linked=true;   // typed into the app and also in Notion: link, and send what only the app knows
-        const extra=K.write.filter(a=>a!=='status'&&it[a]!==''&&it[a]!=null&&(r.f[K.map[a]]==null||r.f[K.map[a]]===''));
+        const extra=[...K.write.filter(a=>a!=='status'&&it[a]!==''&&it[a]!=null&&(r.f[K.map[a]]==null||r.f[K.map[a]]==='')),...(K.linkExtra?.(it,r)||[])];
         if(extra.length)it.nd={f:[...new Set([...(it.nd?.f||[]),...extra])],at:new Date().toISOString()}}}
     if(!it){it={id:uid(),...K.blank()};S[K.arr].push(it)}
     nsApplyRow(K,it,r,it.nd?.f||[]);
@@ -793,7 +827,7 @@ function nsMerge(kind,rows,full){
 }
 async function nsPush(kind,notes){
   const K=NSYNC[kind],ready=!!nsMeta()[kind+'Full'];let linked=false;
-  const list=S[K.arr].filter(x=>!x.gone&&(x.nid?x.nd:(K.create&&ready)));   // unlinked items are created only after a full pull matched them
+  const list=S[K.arr].filter(x=>nsPending(kind,x)&&(x.nid||ready));   // unlinked items are created only after a full pull matched them
   for(let i=0;i<list.length;i+=15){
     const batch=list.slice(i,i+15),sent={};
     const changes=batch.map(x=>{
@@ -806,7 +840,7 @@ async function nsPush(kind,notes){
     for(const res of d.results||[]){
       const x=S[K.arr].find(y=>y.id===res.ref);if(!x)continue;   // S may have been replaced by a Gist pull meanwhile
       if(res.status===410){delete x.nd;K.gone([x]);notes.push(`${K.name(x)}: deleted in Notion, removed here`);continue}
-      if(res.error){notes.push(`${K.name(x)}: ${res.error}`);continue}
+      if(res.error){notes.push(`${K.name(x)}: ${res.error}`);nsFailed=true;continue}
       if(!x.nid)linked=true;
       const s=sent[x.id]||{},left=(x.nd?.f||[]).filter(a=>!(a in s)||x[a]!==s[a]);   // edited again while sending
       if(left.length)x.nd.f=left;else delete x.nd;
@@ -817,13 +851,13 @@ async function nsPush(kind,notes){
   }
   return linked;
 }
-const NS_ON=['jobs','roadmap','tasks'];   // kinds synced so far
+const NS_ON=['jobs','roadmap','tasks','leetcode','projects'];   // every kind the Worker knows
 async function nsSync(mode){
   if(!nsCfg()||!S||nsJob.busy)return;
-  const waiting=()=>NS_ON.some(k=>S[NSYNC[k].arr].some(x=>x.nd&&!x.gone&&(x.nid||NSYNC[k].create)));   // only what can actually be sent
+  const waiting=()=>NS_ON.some(k=>S[NSYNC[k].arr].some(x=>nsPending(k,x)&&(x.nid||!!nsMeta()[k+'Full'])));   // only what can actually be sent
   if(!mode&&!waiting()&&Date.now()-nsJob.at<6e4)return;   // at most one pull a minute unless there's something to send
   nsJob={...nsJob,busy:true};if(['career','study'].includes(view))render();
-  let linked=false;const notes=[],errs=[];
+  let linked=false;const notes=[],errs=[];nsFailed=false;
   for(const kind of NS_ON){
     try{
       const m=nsMeta(),full=mode==='full'||!m[kind+'Full']||!m[kind+'Since']||Date.now()-m[kind+'Full']>6*36e5;
@@ -839,7 +873,7 @@ async function nsSync(mode){
   if(linked)save();else save(true);   // a new link (nid) is real data other devices should get
   if(notes.length)toast(notes.slice(0,3).join(' · ')+(notes.length>3?` (+${notes.length-3} more)`:''));
   if(['career','dash','study'].includes(view))render();
-  if(!nsJob.err&&waiting())nsSoon();
+  if(!nsJob.err&&!nsFailed&&waiting())nsSoon();
 }
 const nsLine=()=>!nsCfg()?'':nsJob.busy?'<span class="faint">↻ syncing with Notion…</span>':nsJob.err?`<span style="color:var(--amber)">○ Notion: ${esc(nsJob.msg)}</span>`:nsJob.at?`<span style="color:var(--acc)">●</span> Notion synced ${Date.now()-nsJob.at<6e4?'just now':ago(nsJob.at)}`:'<span class="faint">○ not synced yet</span>';
 
@@ -1195,7 +1229,7 @@ const lcOpen=(()=>{try{return JSON.parse(localStorage.getItem('opuos.lcopen'))||
 const LCTH='<tr><th></th><th>#</th><th>Problem</th><th>Pattern</th><th>Status</th><th>Practiced</th><th>Last revised</th><th></th></tr>';
 const lcRow=p=>{const r=p.last>=S.lcRound;return `<tr class="${p.mistake?'mis':''}"><td><button class="ck ${r?'on':''}" data-act="lcRev" data-id="${p.id}" title="${r?'Undo':'Mark revised today'}">✓</button></td>
     <td class="mono muted">${p.num}</td>
-    <td><a href="https://leetcode.com/problems/${lcSlug(p.name)}/" target="_blank" rel="noopener" style="color:var(--text)">${esc(p.name)}</a> <span class="mono d-${esc(p.difficulty)}" style="font-size:11px">${esc(p.difficulty)}</span>${lcCode(p)?` <button class="linkbtn mono" style="margin:0;font-size:11px;color:var(--blue)" data-act="openCode" data-id="${esc(lcCode(p).id)}">my solution</button>`:p.link?` <a href="${esc(p.link)}" target="_blank" rel="noopener" class="mono" style="font-size:11px">my solution ↗</a>`:''}<div class="ins">${esc(p.insight||'')}</div></td>
+    <td><a href="https://leetcode.com/problems/${lcSlug(p.name)}/" target="_blank" rel="noopener" style="color:var(--text)">${esc(p.name)}</a>${nsCfg()&&nsPending('leetcode',p)?' <span class="faint" title="Waiting to sync with Notion" style="font-size:11px">⏳</span>':''} <span class="mono d-${esc(p.difficulty)}" style="font-size:11px">${esc(p.difficulty)}</span>${lcCode(p)?` <button class="linkbtn mono" style="margin:0;font-size:11px;color:var(--blue)" data-act="openCode" data-id="${esc(lcCode(p).id)}">my solution</button>`:p.link?` <a href="${esc(p.link)}" target="_blank" rel="noopener" class="mono" style="font-size:11px">my solution ↗</a>`:''}<div class="ins">${esc(p.insight||'')}</div></td>
     <td class="muted" style="font-size:13px">${esc(p.pattern||'')}</td>
     <td><button class="pill clickable ${p.status==='Mastered'?'done':p.status==='Revisit'?'doing':''}" style="background:none" data-act="lcStat" data-id="${p.id}">${esc(p.status||'Solved')}</button></td>
     <td class="mono">${p.count||0}×</td><td class="mono muted" style="font-size:12px">${p.last?fmtDate(p.last):'—'}</td>
@@ -1370,7 +1404,7 @@ function answerReview(key,ok){
   const step=ok?(st?Math.min(st.step+1,IVL.length-1):0):0;
   S.review[key]={step,due:addDays(t,ok?IVL[step]:1),last:t};
   (S.reviewLog??=[]).push({date:t,key,ok:!!ok});if(S.reviewLog.length>1000)S.reviewLog=S.reviewLog.slice(-1000);
-  if(ok&&key.startsWith('lc:')){const p=S.leetcode.find(x=>'lc:'+x.num===key);if(p&&!(p.last>=S.lcRound)){p.prev=p.last||'';p.last=t;p.count=(p.count||0)+1}}
+  if(ok&&key.startsWith('lc:')){const p=S.leetcode.find(x=>'lc:'+x.num===key);if(p&&!(p.last>=S.lcRound)){p.prev=p.last||'';p.last=t;p.count=(p.count||0)+1;nsTouch('leetcode',p,['count'])}}
 }
 
 /* ----- roadmap suggestions from repo folders ----- */
@@ -1407,7 +1441,9 @@ function projects(){
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong style="font-size:18px">${esc(p.name)}</strong><span class="pill ${col[p.status]||''}"><span class="dot"></span>${esc(p.status)}</span></div>
     <p class="muted" style="margin:8px 0 12px;font-size:14px">${esc(p.desc)}</p>
     ${p.next?`<div class="label" style="margin-bottom:4px">Next</div><div style="font-size:14px">${esc(p.next)}</div>`:''}
-    ${p.link?`<div style="margin-top:10px"><a href="${esc(p.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(p.link.replace(/^https?:\/\//,''))} ↗</a></div>`:''}
+    ${(p.tags||[]).length?`<div class="chips" style="margin-top:8px">${p.tags.map(t=>`<span class="pill" style="font-size:10px">${esc(t)}</span>`).join('')}</div>`:''}
+    ${safeUrl(p.link)?`<div style="margin-top:10px"><a href="${esc(safeUrl(p.link))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(p.link.replace(/^https?:\/\//,''))} ↗</a></div>`:''}
+    ${nsCfg()&&p.nd?'<div class="faint" style="font-size:11px;margin-top:6px">⏳ waiting to sync with Notion</div>':''}
   </div>`).join('')}</div>`;
 }
 
@@ -1829,7 +1865,7 @@ const jobInfo=j=>{const meta=[j.found&&'found '+fmtDate(j.found),j.source,j.resu
     ${pl||nl?`<div class="chips" style="margin-top:8px">${pl?`<a class="btn sm" href="${esc(pl)}" target="_blank" rel="noopener">Open posting ↗</a>`:''}${nl?`<a class="btn sm" href="${esc(nl)}" target="_blank" rel="noopener">Open in Notion ↗</a>`:''}</div>`:''}</div>`:''};
 const jobF=(j={})=>[{type:'html',html:jobInfo(j)},{k:'company',label:'Company'},{k:'role',label:'Role'},{k:'status',label:'Stage',type:'select',opts:JS},{k:'location',label:'Location'},{k:'pay',label:'Pay'},{k:'type',label:'Job type',type:'select',opts:[['','—'],'Full-time','Part-time','Contract','Temporary']},{k:'date',label:'Applied on',type:'date'},{k:'followUp',label:'Follow up on',type:'date'},{k:'link',label:'Posting URL'},{k:'notes',label:'Notes',type:'textarea'}];
 const skillF=[{k:'name',label:'Skill'},{k:'cat',label:'Category',ph:'Languages, Web, Tools…'},{k:'level',label:'Level (1–5)',type:'select',opts:[[1,'1 · Beginner'],[2,'2 · Learning'],[3,'3 · Comfortable'],[4,'4 · Strong'],[5,'5 · Expert']]},{k:'notes',label:'Evidence / notes'}];
-const projF=[{k:'name',label:'Name'},{k:'status',label:'Status',type:'select',opts:['Planning','Active','Paused','Shipped']},{k:'desc',label:'Description',type:'textarea'},{k:'next',label:'Next action'},{k:'link',label:'Link'}];
+const projF=(p={})=>[{type:'html',html:nsCfg()&&!p.nLocal?`<div class="jinfo faint" style="font-size:12px">${p.nid?'Name and link sync with your Notion portfolio (My projects). Status, description and next action stay in OPU/OS.':'Becomes part of your Notion portfolio (name + link) once its status is Shipped.'}${safeUrl(p.nurl)?`<div class="chips" style="margin-top:8px"><a class="btn sm" href="${esc(safeUrl(p.nurl))}" target="_blank" rel="noopener">Open in Notion ↗</a></div>`:''}</div>`:''},{k:'name',label:'Name'},{k:'status',label:'Status',type:'select',opts:['Planning','Active','Paused','Shipped']},{k:'desc',label:'Description',type:'textarea'},{k:'next',label:'Next action'},{k:'link',label:'Link'}];
 const stepF=[{k:'track',label:'Track (existing or new)'},{k:'step',label:'Step number (optional)',type:'number'},{k:'title',label:'Title'},{k:'status',label:'Status',type:'select',opts:['todo','doing','done']},{k:'notes',label:'Notes'},{k:'url',label:'Link (optional)'}];
 const stepLinkedF=r=>[{type:'html',html:`<div class="jinfo"><div style="font-weight:600">${r.step!=null?`Step ${r.step} · `:''}${esc(r.title)}</div><div class="faint mono" style="font-size:12px;margin-top:4px">${[r.track,r.phase].filter(Boolean).map(esc).join(' · ')}</div>
   <div class="faint" style="font-size:12px;margin-top:8px">Title, step and track come from Notion: change them there. Status and notes sync both ways.</div>${safeUrl(r.url)?`<div class="chips" style="margin-top:8px"><a class="btn sm" href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener">Open in Notion ↗</a></div>`:''}</div>`},
@@ -1870,8 +1906,11 @@ const A={
   editSession:d=>{const s=find('sessions',d.id);form('Edit session',sessF(),s,o=>Object.assign(s,o),del('sessions',d.id))},
   addSkill:()=>form('New skill',skillF,{level:1},o=>S.skills.push({id:uid(),...o,level:+o.level})),
   editSkill:d=>{const s=find('skills',d.id);form('Edit skill',skillF,s,o=>Object.assign(s,o,{level:+o.level}),del('skills',d.id))},
-  addProject:()=>form('New project',projF,{status:'Planning'},o=>S.projects.push({id:uid(),...o})),
-  editProject:d=>{const p=find('projects',d.id);form('Edit project',projF,p,o=>Object.assign(p,o),del('projects',d.id))},
+  addProject:()=>form('New project',projF(),{status:'Planning'},o=>{S.projects.push({id:uid(),...o});nsSoon()}),
+  editProject:d=>{const p=find('projects',d.id);if(!p)return;
+    form('Edit project',projF(p),p,o=>{const ch=Object.keys(o).filter(k=>String(p[k]??'')!==String(o[k]??''));Object.assign(p,o);
+      nsTouch('projects',p,p.nid?ch:[]);if(!p.nid)nsSoon()},   // unlinked: becomes Shipped → created in Notion
+      p.nid?()=>nsForget('projects',p):del('projects',d.id),p.nid?'Remove this project from OPU/OS? It stays in your Notion portfolio (nothing is deleted there) and won\'t come back here.':null)},
   addJob:()=>form('New application',jobF(),{status:'applied',date:today(),followUp:addDays(today(),7)},o=>{S.jobs.push({id:uid(),...o});nsSoon()}),
   editJob:d=>{const j=find('jobs',d.id);if(!j)return;if(j.fresh){delete j.fresh;save(true);render()}
     form('Edit application',jobF(j),j,o=>{const ch=Object.keys(o).filter(k=>String(j[k]??'')!==String(o[k]??''));Object.assign(j,o);nsTouch('jobs',j,ch)},
@@ -1919,10 +1958,13 @@ const A={
   openGhNote:d=>{const n=ghIdx?.items.find(x=>x.id===d.id);if(!n)return;noteId=n.id;nView='notes';nSubj=n.subject;nTopic=n.topic;nType='all';nSrc='all';nQ='';go('notes')},
   sugDo:d=>{const r=find('roadmap',d.id);r.status='doing';nsTouch('roadmap',r,['status']);save();render();toast(`Marked doing: ${r.title}`)},
   sugNo:d=>{S.sugDismiss[d.id+'|'+d.k]=1;save();render()},
-  lcRev:d=>{const p=find('leetcode',d.id);if(p.last>=S.lcRound){p.count=Math.max(0,(p.count||1)-1);p.last=p.prev||'';delete p.prev}else{p.prev=p.last||'';p.last=today();p.count=(p.count||0)+1}save();render()},
-  lcStat:d=>{const p=find('leetcode',d.id);p.status=LCS[(LCS.indexOf(p.status)+1)%LCS.length];save();render()},
-  lcAdd:()=>form('Add LeetCode problem',lcF_,{difficulty:'Easy',status:'Solved'},o=>S.leetcode.push({id:uid(),...o,num:+o.num,count:1,last:today(),mistake:false})),
-  lcEdit:d=>{const p=find('leetcode',d.id);form('Edit problem',[...lcF_,{k:'mistake',label:'Made a mistake?',type:'select',opts:[['false','No'],['true','Yes']]}],p,o=>Object.assign(p,o,{num:+o.num,mistake:o.mistake==='true'}),del('leetcode',d.id))},
+  lcRev:d=>{const p=find('leetcode',d.id);if(p.last>=S.lcRound){p.count=Math.max(0,(p.count||1)-1);p.last=p.prev||'';delete p.prev}else{p.prev=p.last||'';p.last=today();p.count=(p.count||0)+1}nsTouch('leetcode',p,['count']);save();render()},
+  lcStat:d=>{const p=find('leetcode',d.id);p.status=LCS[(LCS.indexOf(p.status)+1)%LCS.length];nsTouch('leetcode',p,['status']);save();render()},
+  lcAdd:()=>form('Add LeetCode problem',lcF_,{difficulty:'Easy',status:'Solved'},o=>{const p={id:uid(),...o,num:+o.num,count:1,last:today(),mistake:false};
+    if(nsCfg()&&S.leetcode.some(x=>+x.num===p.num))return toast(`LC ${p.num} is already in your list`);S.leetcode.push(p);nsSoon()}),
+  lcEdit:d=>{const p=find('leetcode',d.id);form('Edit problem',[...lcF_,{k:'mistake',label:'Made a mistake?',type:'select',opts:[['false','No'],['true','Yes']]}],p,
+    o=>{const n={...o,num:+o.num,mistake:o.mistake==='true'},ch=Object.keys(n).filter(k=>String(p[k]??'')!==String(n[k]??''));Object.assign(p,n);nsTouch('leetcode',p,ch)},
+    p.nid?()=>nsForget('leetcode',p):del('leetcode',d.id),p.nid?'Remove this problem from OPU/OS? It stays in Notion (nothing is deleted there) and won\'t come back here.':null)},
   lcRound:()=>{if(confirm(`Start a new revision round? The ✓ marks reset (practice counts are kept). Last round: ${lcRevised()}/${S.leetcode.length} revised.`)){S.lcRound=today();save();render()}},
   /* notes */
   nView:d=>{nShow=30;nView=d.v;nOpen=false;noteMode=d.v==='journal'?'edit':noteMode;view==='notes'?render():go('notes')},
