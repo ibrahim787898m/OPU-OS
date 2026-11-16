@@ -1159,7 +1159,7 @@ function studyWeek(){
   :!S.plans.some(x=>x.week===ws)&&!planId?`<div class="banner" style="border-color:rgba(255,198,92,.35);background:rgba(255,198,92,.08)"><span>No plan for this week yet: showing the latest one.${syncCfg()?.token?' It should arrive automatically from Notion.':''}</span></div>`:''}
   <div class="g g3">
     <div class="card span2"><h3><span>${esc(p.title)}${isCur?' <span class="pill done" style="margin-left:6px">this week</span>':''}</span>
-      <span class="chips"><select class="btn sm" id="planSel">${hist.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.title)}</option>`).join('')}</select>${p.url?`<a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}<button class="btn sm ghost danger" data-act="delPlan" data-id="${p.id}">Delete</button></span></h3>
+      <span class="chips"><select class="btn sm" id="planSel">${hist.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.title)}</option>`).join('')}</select>${p.url?`<a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}</span></h3>
       <div style="display:flex;justify-content:space-between" class="mono muted"><span style="font-size:12px">${dd}/${p.days.length} days done</span><span style="font-size:12px">${p.days.length?Math.round(dd/p.days.length*100):0}%</span></div>
       <div class="meter" style="margin:6px 0 16px"><i style="width:${p.days.length?dd/p.days.length*100:0}%"></i></div>
       <div class="days">${p.days.map((d,i)=>`<div class="day ${d.done?'done':''} ${d.date===today()?'today':''}"><button class="ck ${d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${i}" title="Mark done">✓</button><div><div class="dn">${esc(d.day)}${nsCfg()&&(d.ed||planTasks(d).mine.some(t=>t.nd))?' <span class="faint" title="Waiting to sync with Notion" style="font-size:11px">⏳</span>':''}</div><div class="fo">${esc(d.focus)}</div></div><div class="pl">${inl(esc(d.plan))}</div><button class="btn sm ghost ed" data-act="pDayEdit" data-p="${p.id}" data-i="${i}" title="Edit this day">${I('edit')}</button></div>`).join('')||'<div class="empty">No day-by-day table found in this plan.</div>'}</div>
@@ -1895,7 +1895,6 @@ const A={
   /* study */
   studyTab:d=>{rvShow=10;studyTab=d.t;planId=null;go('study')},
   openPlan:d=>{planId=d.id;render()},
-  delPlan:d=>{if(confirm('Delete this weekly plan?')){S.plans=S.plans.filter(p=>p.id!==d.id);planId=null;save();render()}},
   pDay:d=>{const p=S.plans.find(x=>x.id===d.p),x=p.days[+d.i];x.done=!x.done;x.nDone=false;
     if(nsCfg())planTasks(x).mine.forEach(t=>{const st=x.done?'Done':'To Do';if(t.status!==st){t.status=st;nsTouch('tasks',t,['status'])}});
     save();render();if(x.done&&p.days.every(y=>y.done))toast('Whole week done 🎉')},
