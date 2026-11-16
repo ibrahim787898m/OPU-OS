@@ -125,11 +125,20 @@ main{padding:34px 40px 80px;max-width:1680px;width:100%;margin:0 auto}
 .step.done .title{color:var(--dim);text-decoration:line-through;text-decoration-color:var(--faint)}
 .step .title{flex:1}
 
-/* kanban */
-.kanban{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px}
-.col{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px;min-height:200px}
-.col h4{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:500;margin-bottom:10px;display:flex;justify-content:space-between}
-.jcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
+/* career: one row per stage, cards slide sideways (page height stays the same however many jobs) */
+.stages{display:flex;flex-direction:column;gap:12px}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.stage h4{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);font-weight:500;display:flex;align-items:center;gap:8px;min-height:28px}
+.stage h4 .n{color:var(--faint)}
+.stage h4 .sp{flex:1}
+.stage .karr{display:inline-flex;gap:4px}.stage .karr .btn:disabled{opacity:.3;cursor:default}
+.stage.empty{padding:8px 14px}.stage.empty h4 .none{text-transform:none;letter-spacing:0;color:var(--faint)}
+.kslide{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-padding-left:2px;padding:10px 2px 6px;scrollbar-width:thin;overscroll-behavior-x:contain}
+.kslide>.jcard{flex:0 0 250px;scroll-snap-align:start;margin:0}
+.kslide.all{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));overflow:visible}
+.kslide.all>.jcard{flex:none}
+.jcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;display:flex;flex-direction:column}
+.jcard .ft{margin-top:auto!important;padding-top:8px}
 .jcard:hover{border-color:var(--line2)}
 .jcard .co{font-weight:600}
 .jcard .ro{color:var(--dim);font-size:13px}
@@ -344,7 +353,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
   .editor input.title{font-size:22px}
   .day{grid-template-columns:22px minmax(0,1fr) auto}.day .pl{grid-column:2/4}.day .ed{grid-column:3;grid-row:1}
   .step{flex-wrap:wrap}.step .title{min-width:60%}
-  .kanban{grid-template-columns:repeat(5,minmax(220px,80vw))}
+  .kslide>.jcard{flex-basis:76vw}.stage .karr{display:none}
   .toast{left:14px;right:14px;bottom:14px;text-align:center}
 }
 @media (max-width:340px){
@@ -1429,9 +1438,26 @@ function career(){
   const st=nsLine()+(c&&!nsJob.busy&&!nsJob.err&&wait?` · ⏳ ${wait} waiting`:'');
   return `<div class="head"><div><h2>Career</h2><div class="sub">Job hunt + co-op pipeline. ${L.length} tracked · ${n('interview')} interviewing${fresh?` · <span style="color:var(--acc)">${fresh} new match${fresh>1?'es':''}</span>`:''}.</div>${st?`<div class="mono" style="font-size:12px;margin-top:6px">${st}</div>`:''}</div>
     <div class="chips">${fresh?`<button class="btn" data-act="jobsSeen">✓ Mark ${fresh} seen</button>`:''}${c?`<button class="btn" data-act="jobsSync" ${nsJob.busy?'disabled':''}>${I('refresh')} Notion</button>`:''}<button class="btn pri" data-act="addJob">+ Application</button></div></div>
-  <div class="kanban">${JS.map(([k,l],ci)=>{const col=L.filter(j=>j.status===k).sort((a,b)=>(b.fresh?1:0)-(a.fresh?1:0));
-    return `<div class="col"><h4>${l}<span>${col.length}</span></h4>${col.slice(0,kShow[k]?999:6).map(j=>jCard(j,ci,c)).join('')}${col.length>6?`<button class="btn sm ghost" style="width:100%" data-act="kMore" data-k="${k}">${kShow[k]?'Show fewer':`+${col.length-6} more`}</button>`:''}</div>`}).join('')}</div>`;
+  <div class="stages">${JS.map(([k,l],ci)=>{const col=L.filter(j=>j.status===k).sort((a,b)=>(b.fresh?1:0)-(a.fresh?1:0)),all=!!kShow[k];
+    if(!col.length)return `<div class="stage empty"><h4>${l} <span class="n">0</span> <span class="none">· nothing here yet</span></h4></div>`;
+    return `<div class="stage"><h4>${l} <span class="n">${col.length}</span><span class="sp"></span>
+      ${col.length>1?`<button class="btn sm ghost" data-act="kMore" data-k="${k}">${all?'Slide':'Show all'}</button>`:''}
+      ${all?'':`<span class="karr"><button class="btn sm ghost" data-act="kSlide" data-k="${k}" data-d="-1" title="Previous"><span style="display:inline-flex;transform:scaleX(-1)">${I('chev')}</span></button><button class="btn sm ghost" data-act="kSlide" data-k="${k}" data-d="1" title="Next">${I('chev')}</button></span>`}</h4>
+      <div class="kslide${all?' all':''}" data-k="${k}">${col.map(j=>jCard(j,ci,c)).join('')}</div></div>`}).join('')}</div>`;
 }
+/* keep each row's slide position when the page re-renders (syncs re-render it), and grey out ‹ › at the ends */
+let kScroll={};
+after.career=()=>document.querySelectorAll('.kslide:not(.all)').forEach(el=>{
+  const k=el.dataset.k,arr=[...document.querySelectorAll(`[data-act="kSlide"][data-k="${k}"]`)];
+  const upd=()=>{kScroll[k]=el.scrollLeft;const end=el.scrollWidth-el.clientWidth-2;
+    arr.forEach(b=>{b.disabled=+b.dataset.d<0?el.scrollLeft<=2:el.scrollLeft>=end});
+    const fits=end<=0;   // every card visible: no arrows, no "Show all"
+    arr.forEach(b=>b.parentElement.style.display=fits?'none':'');
+    const sa=document.querySelector(`[data-act="kMore"][data-k="${k}"]`);if(sa)sa.style.display=fits?'none':''};
+  el.scrollLeft=kScroll[k]||0;upd();el.addEventListener('scroll',upd,{passive:true});
+});
+addEventListener('resize',()=>{if(view==='career')after.career()});
+
 
 /* ---------------- GITHUB ---------------- */
 function evLabel(e){
@@ -1926,7 +1952,8 @@ const A={
   rvMore:()=>{rvShow+=10;render()},
   nMore:()=>{nShow+=30;render()},
   rdDone:()=>{rdOpen[studyTrack]=!(rdOpen[studyTrack]??false);render()},
-  kMore:d=>{kShow[d.k]=!kShow[d.k];render()},
+  kMore:d=>{kShow[d.k]=!kShow[d.k];if(kShow[d.k])kScroll[d.k]=0;render()},
+  kSlide:d=>{const el=document.querySelector(`.kslide[data-k="${d.k}"]`);if(el)el.scrollBy({left:+d.d*Math.max(260,el.clientWidth*.9),behavior:'smooth'})},
   qToggle:d=>{qOpen[d.k]=d.open!=='1';qSaveOpen();render()},
   qAll:d=>{qVisible.forEach(k=>qOpen[k]=d.v==='1');qSaveOpen();render()},
   qSubj:d=>{qSubj=d.v;render()},
