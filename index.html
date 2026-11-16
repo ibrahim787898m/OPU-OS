@@ -1439,7 +1439,7 @@ function jCard(j,ci,c){
   return `<div class="jcard${j.fresh?' fresh':''}" data-act="editJob" data-id="${j.id}"><div class="co">${j.fresh?'<span class="newb">NEW</span>':''}${esc(j.company)}${c&&(j.nd||!j.nid)?' <span class="faint" title="Waiting to sync with Notion" style="font-size:11px">⏳</span>':''}</div><div class="ro">${esc(j.role)}</div>
     ${tags||j.resume?`<div class="tg">${tags}${j.resume?` <span class="pill" style="font-size:10px;padding:0 6px">${esc(j.resume)}</span>`:''}</div>`:''}
     <div class="ft"><span class="mono" style="font-size:11px">${j.followUp?`<span class="${j.followUp<today()?'over':j.followUp<=addDays(today(),3)?'due':'faint'}">${I('refresh')} ${fmtDate(j.followUp)}</span>`:`<span class="faint">${j.date?fmtDate(j.date):j.found?'found '+fmtDate(j.found):''}</span>`}</span>
-    <span class="mv">${ci>0?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="-1">←</button>`:''}${ci<JS.length-1?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="1">→</button>`:''}</span></div></div>`;
+    <span class="mv">${ci>0?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="-1" title="Move up to ${esc(JS[ci-1][1])}" aria-label="Move up to ${esc(JS[ci-1][1])}">↑</button>`:''}${ci<JS.length-1?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="1" title="Move down to ${esc(JS[ci+1][1])}" aria-label="Move down to ${esc(JS[ci+1][1])}">↓</button>`:''}</span></div></div>`;
 }
 function career(){
   const L=jobsLive(),n=k=>L.filter(j=>j.status===k).length,fresh=L.filter(j=>j.fresh).length,c=nsCfg();
