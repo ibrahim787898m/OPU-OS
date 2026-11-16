@@ -474,7 +474,7 @@ function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){} if(!S)S=s
 function migrate(){
   S.settings.noteRepos??=['math','dsa','cs50x'];
   S.settings.codeRepos??=['CS50P','leetcode-solutions','dsa','math']; // cs50x left out on purpose (academic honesty)
-  S.plans??=[];S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
+  S.plans??=[];S.ntasks??=[];S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
   S.notes.forEach(n=>{n.tags??=[];n.subject??='';n.topic??='';if(n.type==='journal')n.date??=dstr(new Date(n.updated||Date.now()))});
 }
 function save(quiet){if(!quiet)S._t=Date.now();
@@ -626,7 +626,7 @@ async function checkAutoPlans(force){
 /* Notion Tasks: a day is ticked when its task(s) are Done in Notion. Never unticks:
    a tick made in OPU/OS can't reach Notion, so Notion's "To Do" mustn't undo it. */
 function notionTicks(p,tasks){
-  if(!tasks?.length)return;
+  if(!tasks?.length||nsCfg())return;   // with Notion sync on, ticks come from the Worker (fresher, two-way)
   p.days.forEach(d=>{
     const same=tasks.filter(t=>t.date===d.date),lbl=d.day.split(/\s+/).slice(0,2).join(' ').toLowerCase();
     const mine=same.filter(t=>t.title.toLowerCase().startsWith(lbl)),use=mine.length?mine:same;
@@ -655,7 +655,7 @@ function mergeAutoPlans(list,history=[]){
     notionTicks(p,r.tasks);
     changed++;
   }
-  if(changed){save();if(added.length)toast('New weekly plan: '+added.join(', '))}
+  if(changed){daysFromTasks();save();if(added.length)toast('New weekly plan: '+added.join(', '))}
   return changed;
 }
 
@@ -731,7 +731,34 @@ const NSYNC={
     match:null,blank:()=>({title:'',track:'Other',step:null,status:'todo',notes:''}),
     gone:list=>{S.roadmap=S.roadmap.filter(r=>!list.includes(r))},   // deleted in Notion: the step leaves the roadmap here too
     label:{}},
+  // Notion Tasks (planned in the last 120 days): a copy in S.ntasks. Plan days are ticked from them,
+  // and ticking a day in OPU/OS sets its task(s) Done / To Do (see planTasks, daysFromTasks).
+  tasks:{arr:'ntasks',map:{title:'title',date:'date',status:'status'},write:['status'],only:[],urlKey:'url',create:false,name:t=>String(t.title||'').split(' — ')[0],
+    to:(t,a)=>nOrNull(t[a]),from:(a,v)=>v??'',match:null,blank:()=>({title:'',date:'',status:'To Do'}),
+    gone:list=>{S.ntasks=S.ntasks.filter(t=>!list.includes(t))},   // deleted in Notion, or now older than 120 days
+    afterMerge:()=>tasksSeed(),
+    label:{}},
 };
+/* A plan day's tasks: same date, title starting with the day label ("Mon 16 — …"). Only those
+   are ever written. Other tasks on that date (errands etc.) can only tick a day, never untick it
+   or be changed (the old one-way rule). */
+const isDone=t=>/^done$/i.test(t.status);
+function planTasks(d){
+  const same=(S.ntasks||[]).filter(t=>t.date===d.date),lbl=String(d.day||'').split(/\s+/).slice(0,2).join(' ').toLowerCase();
+  return {same,mine:lbl?same.filter(t=>String(t.title||'').toLowerCase().startsWith(lbl)):[]};
+}
+function daysFromTasks(){   // Notion → plan ticks; returns true if a day changed
+  if(!nsCfg()||!S.tasksSeeded)return false;let ch=false;
+  S.plans.forEach(p=>p.days.forEach(d=>{const{same,mine}=planTasks(d);
+    const v=mine.length?mine.every(isDone):(same.length&&same.every(isDone)?true:null);
+    if(v!==null&&v!==!!d.done){d.done=v;d.nDone=v;ch=true}}));
+  return ch;
+}
+function tasksSeed(){   // first sync only: days already ticked in OPU/OS are sent to Notion instead of being unticked
+  if(S.tasksSeeded)return;
+  S.plans.forEach(p=>p.days.forEach(d=>{if(!d.done)return;planTasks(d).mine.filter(t=>!isDone(t)).forEach(t=>{t.status='Done';nsTouch('tasks',t,['status'])})}));
+  S.tasksSeeded=true;
+}
 const jobsLive=()=>S.jobs.filter(j=>!j.gone&&j.status!=='skipped');
 const safeUrl=u=>/^https?:\/\//i.test(String(u||'').trim())?String(u).trim():'';
 let nsJob={busy:false,at:0,msg:'',err:false},nsT=null;
@@ -790,7 +817,7 @@ async function nsPush(kind,notes){
   }
   return linked;
 }
-const NS_ON=['jobs','roadmap'];   // kinds synced so far
+const NS_ON=['jobs','roadmap','tasks'];   // kinds synced so far
 async function nsSync(mode){
   if(!nsCfg()||!S||nsJob.busy)return;
   const waiting=()=>NS_ON.some(k=>S[NSYNC[k].arr].some(x=>x.nd&&!x.gone&&(x.nid||NSYNC[k].create)));   // only what can actually be sent
@@ -802,12 +829,13 @@ async function nsSync(mode){
       const m=nsMeta(),full=mode==='full'||!m[kind+'Full']||!m[kind+'Since']||Date.now()-m[kind+'Full']>6*36e5;
       const d=await nsApi(`/pull?kinds=${kind}`+(full?'':'&since='+encodeURIComponent(m[kind+'Since'])));
       if(d.errors?.[kind])throw new Error(d.errors[kind]);
-      linked=nsMerge(kind,d.rows?.[kind]||[],full)||linked;
+      linked=nsMerge(kind,d.rows?.[kind]||[],full)||linked;NSYNC[kind].afterMerge?.();
       const m2=nsMeta();m2[kind+'Since']=d.now;if(full)m2[kind+'Full']=Date.now();setNsMeta(m2);
       linked=(await nsPush(kind,notes))||linked;
     }catch(e){errs.push(`${kind}: ${e.message}`)}
   }
   nsJob={busy:false,at:Date.now(),msg:errs.join(' · '),err:!!errs.length};
+  daysFromTasks();
   if(linked)save();else save(true);   // a new link (nid) is real data other devices should get
   if(notes.length)toast(notes.slice(0,3).join(' · ')+(notes.length>3?` (+${notes.length-3} more)`:''));
   if(['career','dash','study'].includes(view))render();
@@ -1087,8 +1115,9 @@ function studyWeek(){
       <span class="chips"><select class="btn sm" id="planSel">${hist.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.title)}</option>`).join('')}</select>${p.url?`<a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}<button class="btn sm ghost danger" data-act="delPlan" data-id="${p.id}">Delete</button></span></h3>
       <div style="display:flex;justify-content:space-between" class="mono muted"><span style="font-size:12px">${dd}/${p.days.length} days done</span><span style="font-size:12px">${p.days.length?Math.round(dd/p.days.length*100):0}%</span></div>
       <div class="meter" style="margin:6px 0 16px"><i style="width:${p.days.length?dd/p.days.length*100:0}%"></i></div>
-      <div class="days">${p.days.map((d,i)=>`<div class="day ${d.done?'done':''} ${d.date===today()?'today':''}"><button class="ck ${d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${i}" title="Mark done">✓</button><div><div class="dn">${esc(d.day)}${d.nDone?' <span class="pill done" title="Marked Done in Notion" style="font-size:9px;padding:0 5px">N</span>':''}</div><div class="fo">${esc(d.focus)}</div></div><div class="pl">${inl(esc(d.plan))}</div></div>`).join('')||'<div class="empty">No day-by-day table found in this plan.</div>'}</div>
+      <div class="days">${p.days.map((d,i)=>`<div class="day ${d.done?'done':''} ${d.date===today()?'today':''}"><button class="ck ${d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${i}" title="Mark done">✓</button><div><div class="dn">${esc(d.day)}${d.nDone?' <span class="pill done" title="Marked Done in Notion" style="font-size:9px;padding:0 5px">N</span>':''}${nsCfg()&&planTasks(d).mine.some(t=>t.nd)?' <span class="faint" title="Waiting to sync with Notion" style="font-size:11px">⏳</span>':''}</div><div class="fo">${esc(d.focus)}</div></div><div class="pl">${inl(esc(d.plan))}</div></div>`).join('')||'<div class="empty">No day-by-day table found in this plan.</div>'}</div>
       ${p.daysNote?`<div class="faint" style="font-size:13px;margin-top:12px">${inl(esc(p.daysNote))}</div>`:''}
+      ${nsCfg()?`<div class="faint mono" style="font-size:11px;margin-top:10px">ticks sync with Notion Tasks · ${nsLine()}</div>`:''}
     </div>
     <div class="g" style="align-content:start">
       <div class="card"><h3><span>Must-do outcomes</span>${p.outcomes.length?`<span class="mono faint" style="text-transform:none">${od}/${p.outcomes.length}</span>`:''}</h3>
@@ -1862,7 +1891,9 @@ const A={
   pastePlan:pastePlanModal,
   openPlan:d=>{planId=d.id;render()},
   delPlan:d=>{if(confirm('Delete this weekly plan?')){S.plans=S.plans.filter(p=>p.id!==d.id);planId=null;save();render()}},
-  pDay:d=>{const p=S.plans.find(x=>x.id===d.p),x=p.days[+d.i];x.done=!x.done;x.nDone=false;save();render();if(x.done&&p.days.every(y=>y.done))toast('Whole week done 🎉')},
+  pDay:d=>{const p=S.plans.find(x=>x.id===d.p),x=p.days[+d.i];x.done=!x.done;x.nDone=false;
+    if(nsCfg())planTasks(x).mine.forEach(t=>{const st=x.done?'Done':'To Do';if(t.status!==st){t.status=st;nsTouch('tasks',t,['status'])}});
+    save();render();if(x.done&&p.days.every(y=>y.done))toast('Whole week done 🎉')},
   pOut:d=>{const o=S.plans.find(x=>x.id===d.p).outcomes[+d.i];o.done=!o.done;save();render()},
   reviewToJournal:d=>{const p=S.plans.find(x=>x.id===d.id);const n={id:uid(),type:'journal',kind:'review',date:today(),title:'Weekly review — '+p.title,body:p.review.map(r=>`## ${r.q}\n\n${r.a}\n`).join('\n'),tags:[],subject:'',topic:'',updated:Date.now()};S.notes.push(n);jId=n.id;nView='journal';noteMode='view';save();go('notes');toast('Saved to journal')},
   lcF:d=>{lcF=d.f;render()},
