@@ -733,8 +733,8 @@ const NSYNC={
     label:{}},
   // Notion Tasks (planned in the last 120 days): a copy in S.ntasks. Plan days are ticked from them,
   // and ticking a day in OPU/OS sets its task(s) Done / To Do (see planTasks, daysFromTasks).
-  tasks:{arr:'ntasks',map:{title:'title',date:'date',status:'status'},write:['status','title'],only:[],urlKey:'url',create:false,name:t=>String(t.title||'').split(' — ')[0],
-    to:(t,a)=>nOrNull(t[a]),from:(a,v)=>v??'',match:null,blank:()=>({title:'',date:'',status:'To Do'}),
+  tasks:{arr:'ntasks',map:{title:'title',date:'date',status:'status',notes:'notes'},write:['status','title','notes'],only:[],urlKey:'url',create:false,name:t=>String(t.title||'').split(' — ')[0],
+    to:(t,a)=>nOrNull(t[a]),from:(a,v)=>v??'',match:null,blank:()=>({title:'',date:'',status:'To Do',notes:''}),
     gone:list=>{S.ntasks=S.ntasks.filter(t=>!list.includes(t))},   // deleted in Notion, or now older than 120 days
     afterMerge:()=>tasksSeed(),
     label:{}},
@@ -776,6 +776,7 @@ function nsForget(kind,x){
    are ever written. Other tasks on that date (errands etc.) can only tick a day, never untick it
    or be changed (the old one-way rule). */
 const isDone=t=>/^done$/i.test(t.status);
+const mdPlain=s=>String(s??'').replace(/\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\([^)]*\)|\*([^*\s][^*]*?)\*/g,(_,a,b,c,d)=>a??b??c??d).trim();
 function planTasks(d){
   const same=(S.ntasks||[]).filter(t=>t.date===d.date),lbl=String(d.day||'').split(/\s+/).slice(0,2).join(' ').toLowerCase();
   return {same,mine:lbl?same.filter(t=>String(t.title||'').toLowerCase().startsWith(lbl)):[]};
@@ -1901,14 +1902,16 @@ const A={
   pDayEdit:d=>{const p=S.plans.find(x=>x.id===d.p),x=p?.days[+d.i];if(!x)return;
     const lbl=x.day.split(/\s+/).slice(0,2).join(' '),task=nsCfg()?planTasks(x).mine[0]:null,pre=lbl+' — ';
     const tRest=task?(String(task.title).toLowerCase().startsWith(pre.toLowerCase())?task.title.slice(pre.length):String(task.title).slice(lbl.length).replace(/^\s*[—–-]?\s*/,'')):'';
-    const where=!nsCfg()?'Changes stay in OPU/OS (Notion sync is off).':`${p.url?'Focus and plan update this day in the Notion page <b>'+esc(p.title)+'</b>.':'This plan has no Notion page: focus and plan stay in OPU/OS.'}${task?' The task title updates the task in Notion Tasks.':' No Notion task matches this day.'}`;
+    const where=!nsCfg()?'Changes stay in OPU/OS (Notion sync is off).':`${p.url?'Focus and plan update this day in the Notion page <b>'+esc(p.title)+'</b>.':'This plan has no Notion page: focus and plan stay in OPU/OS.'}${task?' The task title and notes update the task in Notion Tasks (notes = the plan text).':' No Notion task matches this day.'}`;
     form('Edit '+esc(x.day),[{type:'html',html:`<div class="jinfo faint" style="font-size:12px">${where}</div>`},{k:'focus',label:'Focus'},{k:'plan',label:'Plan',type:'textarea'},
       ...(task?[{k:'task',label:'Task title (after "'+esc(pre.trim())+'")'}]:[])],{focus:x.focus,plan:x.plan,task:tRest},o=>{
       const ch={};['focus','plan'].forEach(k=>{if(String(o[k]??'').trim()!==String(x[k]??'').trim())ch[k]=String(o[k]??'').trim()});
       if(Object.keys(ch).length){
         if(nsCfg()&&p.url){const ed=x.ed||{set:{},old:{}};Object.keys(ch).forEach(k=>{if(!(k in ed.set))ed.old[k]=x[k]??'';ed.set[k]=ch[k]});ed.at=new Date().toISOString();x.ed=ed}
         Object.assign(x,ch)}
-      if(task){const t=pre+String(o.task||'').trim();if(o.task.trim()&&t!==task.title){task.title=t;nsTouch('tasks',task,['title'])}}
+      if(task){const ch2=[],t=pre+String(o.task||'').trim();if(o.task.trim()&&t!==task.title){task.title=t;ch2.push('title')}
+        if('plan' in ch){const n=mdPlain(ch.plan);if(n!==String(task.notes??'')){task.notes=n;ch2.push('notes')}}   // the planner keeps the task's Notes = the day's Plan
+        nsTouch('tasks',task,ch2)}
       nsSoon()})},
   pOut:d=>{const o=S.plans.find(x=>x.id===d.p).outcomes[+d.i];o.done=!o.done;save();render()},
   reviewToJournal:d=>{const p=S.plans.find(x=>x.id===d.id);const n={id:uid(),type:'journal',kind:'review',date:today(),title:'Weekly review — '+p.title,body:p.review.map(r=>`## ${r.q}\n\n${r.a}\n`).join('\n'),tags:[],subject:'',topic:'',updated:Date.now()};S.notes.push(n);jId=n.id;nView='journal';noteMode='view';save();go('notes');toast('Saved to journal')},
