@@ -733,6 +733,8 @@ const NSYNC={
     match:(x,r)=>jKey(x.company,x.role)===jKey(r.f.company,r.f.role),
     blank:()=>({company:'',role:'',status:'wishlist',date:'',followUp:'',link:'',notes:'',fresh:true}),
     gone:list=>list.forEach(j=>{j.gone=true;delete j.nd}),
+    onRow:(j,prev)=>{if(prev!=='applied'&&j.status==='applied')jobFill(j)},   // marked Applied in Notion
+    afterMerge:()=>{if(S.fuFilled)return;jobsLive().filter(j=>j.status==='applied'&&!j.followUp).forEach(jobFill);S.fuFilled=true},   // once: older Applied jobs
     label:{stage:'stage',applied:'applied date',followUp:'follow-up'}},
   roadmap:{arr:'roadmap',map:{title:'title',step:'step',track:'track',status:'status',notes:'notes'},write:['status','notes'],only:['phase'],urlKey:'url',create:false,name:r=>r.title,
     to:(r,a)=>a==='status'?(RST[r.status]||'Not started'):nOrNull(r[a]),
@@ -803,6 +805,13 @@ function tasksSeed(){   // first sync only: days already ticked in OPU/OS are se
   S.tasksSeeded=true;
 }
 const jobsLive=()=>S.jobs.filter(j=>!j.gone&&j.status!=='skipped');
+/* A job that reaches Applied gets Applied on (today, if empty) and Follow up (+7 days, if empty), so it
+   shows in Dashboard → Follow-ups due wherever it was marked Applied. Only on the move to Applied:
+   clearing the follow-up later on purpose stays cleared. */
+function jobFill(j){
+  const ch=[];if(!j.date){j.date=today();ch.push('date')}if(!j.followUp){j.followUp=addDays(j.date,7);ch.push('followUp')}
+  if(ch.length)nsTouch('jobs',j,ch);
+}
 const safeUrl=u=>/^https?:\/\//i.test(String(u||'').trim())?String(u).trim():'';
 let nsJob={busy:false,at:0,msg:'',err:false},nsT=null,nsFailed=false;   // nsFailed: Notion refused a change this run (don't auto-retry)
 const nsSoon=()=>{if(!nsCfg())return;clearTimeout(nsT);nsT=setTimeout(()=>nsSync(),2500)};
@@ -828,7 +837,7 @@ function nsMerge(kind,rows,full){
         const extra=[...K.write.filter(a=>a!=='status'&&it[a]!==''&&it[a]!=null&&(r.f[K.map[a]]==null||r.f[K.map[a]]==='')),...(K.linkExtra?.(it,r)||[])];
         if(extra.length)it.nd={f:[...new Set([...(it.nd?.f||[]),...extra])],at:new Date().toISOString()}}}
     if(!it){it={id:uid(),...K.blank()};S[K.arr].push(it)}
-    nsApplyRow(K,it,r,it.nd?.f||[]);
+    const prev=it.status;nsApplyRow(K,it,r,it.nd?.f||[]);K.onRow?.(it,prev);
   }
   // a full pull lists every row: linked items missing from it were deleted in Notion
   const linkedList=S[K.arr].filter(x=>x.nid&&!x.gone);
@@ -1906,11 +1915,10 @@ const A={
       p.nid?()=>nsForget('projects',p):del('projects',d.id),p.nid?'Remove this project from OPU/OS? It stays in your Notion portfolio (nothing is deleted there) and won\'t come back here.':null)},
   addJob:()=>form('New application',jobF(),{status:'applied',date:today(),followUp:addDays(today(),7)},o=>{S.jobs.push({id:uid(),...o});nsSoon()}),
   editJob:d=>{const j=find('jobs',d.id);if(!j)return;if(j.fresh){delete j.fresh;save(true);render()}
-    form('Edit application',jobF(j),j,o=>{const ch=Object.keys(o).filter(k=>String(j[k]??'')!==String(o[k]??''));Object.assign(j,o);nsTouch('jobs',j,ch)},
+    form('Edit application',jobF(j),j,o=>{const ch=Object.keys(o).filter(k=>String(j[k]??'')!==String(o[k]??''));Object.assign(j,o);nsTouch('jobs',j,ch);if(ch.includes('status')&&j.status==='applied')jobFill(j)},
       j.nid?()=>{j.status='skipped';nsTouch('jobs',j,['status'])}:del('jobs',d.id),j.nid?'Hide this job? It becomes "Skipped" in Notion too. Nothing is deleted.':null)},
   mv:(d,e)=>{e.stopPropagation();const j=find('jobs',d.id),i=JS.findIndex(x=>x[0]===j.status),ch=['status'];j.status=JS[Math.max(0,Math.min(JS.length-1,i+ +d.d))][0];
-    if(j.status==='applied'&&!j.date){j.date=today();ch.push('date');if(!j.followUp){j.followUp=addDays(today(),7);ch.push('followUp')}}
-    nsTouch('jobs',j,ch);save();render()},
+    nsTouch('jobs',j,ch);if(j.status==='applied')jobFill(j);save();render()},
   jobsSeen:()=>{S.jobs.forEach(j=>delete j.fresh);save(true);render()},
   jobsSync:()=>nsSync('full'),
   addLink:()=>form('New link',[{k:'label',label:'Label'},{k:'url',label:'URL',ph:'https://'}],{},o=>S.links.push({id:uid(),...o})),
