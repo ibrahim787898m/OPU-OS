@@ -135,6 +135,10 @@ main{padding:34px 40px 80px;max-width:1680px;width:100%;margin:0 auto}
 .jcard .ro{color:var(--dim);font-size:13px}
 .jcard .ft{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
 .jcard .mv{display:flex;gap:4px}
+.jcard .tg{font-size:12px;color:var(--faint);margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.jcard.fresh{border-color:rgba(184,243,74,.35)}
+.newb{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;color:#0b0d10;background:var(--acc);border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:2px}
+.jinfo{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px}
 .due{color:var(--amber)} .over{color:var(--red)}
 
 /* skills */
@@ -553,7 +557,7 @@ function setSync(s,msg=''){syncSt={s,at:Date.now(),msg};if(s==='ok'&&syncCfg()?.
   el.className='sync '+s;el.title=msg;
   el.innerHTML='<span>☁</span><span class="lb">'+{off:'local only',pending:'unsaved changes…',busy:'<span class="pulse">syncing…</span>',ok:'synced',err:'sync error — see Settings'}[s]+'</span>';
   const d=$('#syncDetail');if(d)d.textContent=s==='err'?msg:s==='ok'?'Last synced '+new Date().toLocaleTimeString():'';}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&unlocked)pullGist().then(()=>checkAutoPlans())});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&unlocked)pullGist().then(()=>{checkAutoPlans();nsSync()})});
 window.addEventListener('beforeunload',e=>{if(pushT){pushGist();e.preventDefault();e.returnValue=''}});
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),1800)}
 
@@ -695,6 +699,100 @@ function nsCard(){
     <div class="chips"><button class="btn" data-act="nsTest" ${nsSt.busy?'disabled':''}>${I('refresh')} Test connection</button><button class="btn danger" data-act="nsOff">Disconnect</button></div></div>`;
 }
 
+/* ----- jobs ⇄ Notion "Applications" (phase 2) -----
+   A job from Notion keeps: nid/nurl (its page), nf (the Notion values last seen = the "old"
+   side of a change), nd {f:[app fields changed here], at} (waiting to go to Notion),
+   fresh (NEW badge), gone (deleted in Notion: hidden). Notion-only fields: found, resume,
+   source, why, stage (raw Notion stage, to keep "No Answer" apart from "Rejected").
+   Order is always pull → push, so jobs made in the app get matched (company + role)
+   before anything is created. Pull results are saved quietly (save(true)): every device
+   pulls Notion itself, so they must not look like new edits to the Gist sync. */
+const NSM='opuos.nsmeta';
+const nsMeta=()=>{try{return JSON.parse(localStorage.getItem(NSM))||{}}catch(e){return {}}};
+const setNsMeta=m=>localStorage.setItem(NSM,JSON.stringify(m));
+const J2N={company:'company',role:'role',status:'stage',link:'link',date:'applied',followUp:'followUp',notes:'notes',location:'location',pay:'pay',type:'type'};
+const JN_ONLY=['found','resume','source','why','stage'];
+const STAGE_IN={'To apply':'wishlist','Applied':'applied','Interview':'interview','Offer':'offer','Rejected':'rejected','No Answer':'rejected','Skipped':'skipped'};
+const jToN=(j,a)=>a==='status'?({wishlist:'To apply',applied:'Applied',interview:'Interview',offer:'Offer',skipped:'Skipped',rejected:j.stage==='No Answer'?'No Answer':'Rejected'}[j.status]||'To apply'):(j[a]===''||j[a]==null?null:j[a]);
+const jFromN=(a,v)=>a==='status'?(STAGE_IN[v]||'wishlist'):(v??'');
+const jobsLive=()=>S.jobs.filter(j=>!j.gone&&j.status!=='skipped');
+const jKey=(c,r)=>(String(c||'').trim()+'|'+String(r||'').trim()).toLowerCase();
+const safeUrl=u=>/^https?:\/\//i.test(String(u||'').trim())?String(u).trim():'';
+let nsJob={busy:false,at:0,msg:'',err:false},nsT=null;
+const nsSoon=()=>{if(!nsCfg())return;clearTimeout(nsT);nsT=setTimeout(()=>nsSync(),2500)};
+function nsTouch(j,fields){
+  const f=new Set([...(j.nd?.f||[]),...fields.filter(a=>J2N[a])]);if(!f.size)return;
+  j.nd={f:[...f],at:new Date().toISOString()};nsSoon();
+}
+function nsApplyRow(j,r,keep=[]){   // copy Notion's values in, except fields still waiting to be pushed
+  j.nid=r.nid;j.nurl=r.url;delete j.gone;
+  for(const[a,n]of Object.entries(J2N))if(n in r.f&&!keep.includes(a))j[a]=jFromN(a,r.f[n]);
+  JN_ONLY.forEach(k=>j[k]=r.f[k]??'');
+  // for fields still waiting, keep the OLD Notion value: it's the base the Worker compares against
+  const nf={...r.f};keep.forEach(a=>{const n=J2N[a];if(n){if(j.nf&&n in j.nf)nf[n]=j.nf[n];else delete nf[n]}});j.nf=nf;
+}
+function nsMergeJobs(rows,full){
+  let linked=false;const seen=new Set();
+  for(const r of rows){
+    seen.add(r.nid);let j=S.jobs.find(x=>x.nid===r.nid);
+    if(!j){j=S.jobs.find(x=>!x.nid&&!x.gone&&jKey(x.company,x.role)===jKey(r.f.company,r.f.role));
+      if(j){linked=true;   // a job typed into the app that is also in Notion: link, and send what only the app knows
+        const extra=Object.keys(J2N).filter(a=>a!=='status'&&j[a]!==''&&j[a]!=null&&(r.f[J2N[a]]==null||r.f[J2N[a]]===''));
+        if(extra.length)j.nd={f:[...new Set([...(j.nd?.f||[]),...extra])],at:new Date().toISOString()}}}
+    if(!j){j={id:uid(),company:'',role:'',status:'wishlist',date:'',followUp:'',link:'',notes:'',fresh:true};S.jobs.push(j)}
+    nsApplyRow(j,r,j.nd?.f||[]);
+  }
+  // a full pull lists every job: linked ones missing from it were deleted in Notion (hide, never delete here)
+  const linkedN=S.jobs.filter(j=>j.nid&&!j.gone).length;
+  if(full&&(rows.length||linkedN<=3))S.jobs.forEach(j=>{if(j.nid&&!seen.has(j.nid)){j.gone=true;delete j.nd}});
+  return linked;
+}
+async function nsPushJobs(notes){
+  let linked=false;const ready=!!nsMeta().jobsFull;
+  const list=S.jobs.filter(j=>!j.gone&&(j.nid?j.nd:ready));   // unlinked jobs are created only after a full pull matched them
+  for(let i=0;i<list.length;i+=15){
+    const batch=list.slice(i,i+15),sent={};
+    const changes=batch.map(j=>{
+      const fields=j.nid?j.nd.f:Object.keys(J2N).filter(a=>a==='status'||(j[a]!==''&&j[a]!=null));
+      const set={},old={};fields.forEach(a=>{set[J2N[a]]=jToN(j,a);old[J2N[a]]=j.nf?.[J2N[a]]??null});
+      sent[j.id]=Object.fromEntries(fields.map(a=>[a,j[a]]));
+      return j.nid?{kind:'jobs',ref:j.id,nid:j.nid,set,old,at:j.nd.at}:{kind:'jobs',ref:j.id,set};
+    });
+    const d=await nsApi('/push',{changes});
+    for(const res of d.results||[]){
+      const j=S.jobs.find(x=>x.id===res.ref);if(!j)continue;   // S may have been replaced by a Gist pull meanwhile
+      if(res.status===410){j.gone=true;delete j.nd;notes.push(`${j.company}: deleted in Notion, hidden here`);continue}
+      if(res.error){notes.push(`${j.company}: ${res.error}`);continue}
+      if(!j.nid)linked=true;
+      const s=sent[j.id]||{},left=(j.nd?.f||[]).filter(a=>!(a in s)||j[a]!==s[a]);   // edited again while sending
+      if(left.length)j.nd.f=left;else delete j.nd;
+      nsApplyRow(j,res.row,left);
+      const kept=(res.keptNotion||[]).map(n=>n==='stage'?'stage':n==='applied'?'applied date':n==='followUp'?'follow-up':n);
+      if(kept.length)notes.push(`${j.company}: Notion had a newer ${kept.join(', ')}. Kept Notion's.`);
+    }
+  }
+  return linked;
+}
+async function nsSync(mode){
+  if(!nsCfg()||!S||nsJob.busy)return;
+  if(!mode&&!S.jobs.some(j=>j.nd)&&Date.now()-nsJob.at<6e4)return;   // at most one pull a minute unless there's something to send
+  nsJob={...nsJob,busy:true};if(view==='career')render();
+  let linked=false;const notes=[];
+  try{
+    const m=nsMeta(),full=mode==='full'||!m.jobsFull||!m.jobsSince||Date.now()-m.jobsFull>6*36e5;
+    const d=await nsApi('/pull?kinds=jobs'+(full?'':'&since='+encodeURIComponent(m.jobsSince)));
+    if(d.errors?.jobs)throw new Error(d.errors.jobs);
+    linked=nsMergeJobs(d.rows?.jobs||[],full);
+    Object.assign(m,{jobsSince:d.now},full?{jobsFull:Date.now()}:{});setNsMeta(m);
+    linked=(await nsPushJobs(notes))||linked;
+    nsJob={busy:false,at:Date.now(),msg:'',err:false};
+  }catch(e){nsJob={busy:false,at:Date.now(),msg:e.message,err:true}}
+  if(linked)save();else save(true);   // a new link (nid) is real data other devices should get
+  if(notes.length)toast(notes.slice(0,3).join(' · ')+(notes.length>3?` (+${notes.length-3} more)`:''));
+  if(['career','dash'].includes(view))render();
+  if(!nsJob.err&&S.jobs.some(j=>j.nd&&!j.gone))nsSoon();
+}
+
 /* ---------------- lock ---------------- */
 /* Owner-only lock. The code holds only a slow, salted PBKDF2 hash of the owner's passphrase —
    never the passphrase. Set or change it with tools/set_owner.py, then push. Visitors can't
@@ -734,7 +832,7 @@ function initLock(){
   };
   if(ready&&sessionStorage.getItem(SKEY))enter();
 }
-function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');go(location.hash.slice(1)||'dash');renderTimer();checkSite();checkPersist();pullGist().then(()=>{checkAutoPlans();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)})}
+function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');go(location.hash.slice(1)||'dash');renderTimer();checkSite();checkPersist();pullGist().then(()=>{checkAutoPlans();nsSync();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)})}
 function lock(){sessionStorage.removeItem(SKEY);location.reload()}
 
 /* ---------------- stats helpers ---------------- */
@@ -756,9 +854,9 @@ const after={};
 /* ---------------- DASHBOARD ---------------- */
 function dash(){
   const h=new Date().getHours(),greet=h<12?'Good morning':h<18?'Good afternoon':'Good evening';
-  const wm=weekMinutes(),goal=S.settings.weeklyGoal*60,active=S.jobs.filter(j=>['applied','interview'].includes(j.status)).length;
+  const wm=weekMinutes(),goal=S.settings.weeklyGoal*60,active=jobsLive().filter(j=>['applied','interview'].includes(j.status)).length,freshN=jobsLive().filter(j=>j.fresh).length;
   const doing=S.roadmap.filter(r=>r.status==='doing');
-  const due=S.jobs.filter(j=>j.followUp&&j.followUp<=addDays(today(),3)&&!['rejected','offer'].includes(j.status)).sort((a,b)=>a.followUp.localeCompare(b.followUp));
+  const due=jobsLive().filter(j=>j.followUp&&j.followUp<=addDays(today(),3)&&!['rejected','offer'].includes(j.status)).sort((a,b)=>a.followUp.localeCompare(b.followUp));
   const gh=S.gh,nx=nextUp(),p=curPlan(),td=p?planToday(p):null;
   const tracks=tracksList().map(t=>[t,S.roadmap.filter(r=>r.track===t).length]).sort((a,b)=>b[1]-a[1]).slice(0,4).map(x=>x[0]);
   return `
@@ -774,7 +872,7 @@ function dash(){
     <div class="card stat"><div class="label">Study streak</div><div class="v">${streak()}<small> day${streak()===1?'':'s'}</small></div><div class="k faint mono" style="font-size:12px">${hm(S.sessions.reduce((a,s)=>a+(+s.minutes||0),0))} all-time</div></div>
     <div class="card stat clickable" data-act="studyTab" data-t="leetcode"><div class="label">LeetCode solved</div><div class="v">${S.leetcode.length||solved()}</div><div class="k faint mono" style="font-size:12px">${S.leetcode.length?`revised ${lcRevised()}/${S.leetcode.length} this round`:`DSA roadmap ${pct('DSA')}%`}</div></div>
 
-    <div class="card stat"><div class="label">Active applications</div><div class="v">${active}</div><div class="k faint mono" style="font-size:12px">${S.jobs.filter(j=>j.status==='interview').length} interviewing</div></div>
+    <div class="card stat"><div class="label">Active applications</div><div class="v">${active}</div><div class="k faint mono" style="font-size:12px">${jobsLive().filter(j=>j.status==='interview').length} interviewing${freshN?` · <span style="color:var(--acc)">${freshN} new</span>`:''}</div></div>
     <div class="card" style="grid-column:1/-1"><h3><span>Today${p?` · ${esc(p.title||'Week of '+fmtDate(p.week))}`:''}</span><span class="chips">${quizReady()?`${reviewQueue().fin.length?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().fin.length} quiz${reviewQueue().fin.length===1?'':'zes'} to finish →</button>`:''}${reviewQueue().show.length-reviewQueue().fin.length>0?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().show.length-reviewQueue().fin.length} review${reviewQueue().show.length-reviewQueue().fin.length===1?'':'s'} due →</button>`:''}`:`<button class="btn sm" data-act="studyTab" data-t="review">Reviews …</button>`}<button class="btn sm ghost" data-act="studyTab" data-t="week">Weekly plan →</button></span></h3>
       ${td?`<div style="display:flex;gap:12px;align-items:flex-start"><button class="ck ${td.d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${td.i}">✓</button><div><div><strong>${esc(td.d.day)}</strong> <span class="pill" style="margin-left:6px">${esc(td.d.focus||'—')}</span></div><div style="margin-top:6px">${inl(esc(td.d.plan))}</div></div></div>`
       :p?`<div class="empty">Nothing planned for today in this week's plan.</div>`:`<div class="empty">No weekly plan yet. <button class="btn sm" data-act="pastePlan">+ Add weekly plan</button></div>`}
@@ -1263,15 +1361,22 @@ function projects(){
 }
 
 /* ---------------- CAREER ---------------- */
-const JS=[['wishlist','Wishlist'],['applied','Applied'],['interview','Interview'],['offer','Offer'],['rejected','Closed']];
+const JS=[['wishlist','To apply'],['applied','Applied'],['interview','Interview'],['offer','Offer'],['rejected','Closed']];
+function jCard(j,ci,c){
+  const tags=[j.location,j.pay,j.type].filter(Boolean).map(esc).join(' · ');
+  return `<div class="jcard${j.fresh?' fresh':''}" data-act="editJob" data-id="${j.id}"><div class="co">${j.fresh?'<span class="newb">NEW</span>':''}${esc(j.company)}${c&&(j.nd||!j.nid)?' <span class="faint" title="Waiting to sync with Notion" style="font-size:11px">⏳</span>':''}</div><div class="ro">${esc(j.role)}</div>
+    ${tags||j.resume?`<div class="tg">${tags}${j.resume?` <span class="pill" style="font-size:10px;padding:0 6px">${esc(j.resume)}</span>`:''}</div>`:''}
+    <div class="ft"><span class="mono" style="font-size:11px">${j.followUp?`<span class="${j.followUp<today()?'over':j.followUp<=addDays(today(),3)?'due':'faint'}">${I('refresh')} ${fmtDate(j.followUp)}</span>`:`<span class="faint">${j.date?fmtDate(j.date):j.found?'found '+fmtDate(j.found):''}</span>`}</span>
+    <span class="mv">${ci>0?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="-1">←</button>`:''}${ci<JS.length-1?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="1">→</button>`:''}</span></div></div>`;
+}
 function career(){
-  const n=k=>S.jobs.filter(j=>j.status===k).length;
-  return `<div class="head"><div><h2>Career</h2><div class="sub">Job hunt + co-op pipeline. ${S.jobs.length} tracked · ${n('interview')} interviewing.</div></div><button class="btn pri" data-act="addJob">+ Application</button></div>
-  <div class="kanban">${JS.map(([k,l],ci)=>`<div class="col"><h4>${l}<span>${n(k)}</span></h4>
-    ${S.jobs.filter(j=>j.status===k).slice(0,kShow[k]?999:6).map(j=>`<div class="jcard" data-act="editJob" data-id="${j.id}"><div class="co">${esc(j.company)}</div><div class="ro">${esc(j.role)}</div>
-      <div class="ft"><span class="mono" style="font-size:11px">${j.followUp?`<span class="${j.followUp<today()?'over':j.followUp<=addDays(today(),3)?'due':'faint'}">${I('refresh')} ${fmtDate(j.followUp)}</span>`:`<span class="faint">${j.date?fmtDate(j.date):''}</span>`}</span>
-      <span class="mv">${ci>0?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="-1">←</button>`:''}${ci<JS.length-1?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="1">→</button>`:''}</span></div></div>`).join('')}${n(k)>6?`<button class="btn sm ghost" style="width:100%" data-act="kMore" data-k="${k}">${kShow[k]?'Show fewer':`+${n(k)-6} more`}</button>`:''}
-  </div>`).join('')}</div>`;
+  const L=jobsLive(),n=k=>L.filter(j=>j.status===k).length,fresh=L.filter(j=>j.fresh).length,c=nsCfg();
+  const wait=c?L.filter(j=>j.nd||!j.nid).length:0;
+  const st=!c?'':nsJob.busy?'<span class="faint">↻ syncing with Notion…</span>':nsJob.err?`<span style="color:var(--amber)">○ Notion: ${esc(nsJob.msg)}</span>`:nsJob.at?`<span style="color:var(--acc)">●</span> Notion synced ${Date.now()-nsJob.at<6e4?'just now':ago(nsJob.at)}${wait?` · ⏳ ${wait} waiting`:''}`:'<span class="faint">○ not synced yet</span>';
+  return `<div class="head"><div><h2>Career</h2><div class="sub">Job hunt + co-op pipeline. ${L.length} tracked · ${n('interview')} interviewing${fresh?` · <span style="color:var(--acc)">${fresh} new match${fresh>1?'es':''}</span>`:''}.</div>${st?`<div class="mono" style="font-size:12px;margin-top:6px">${st}</div>`:''}</div>
+    <div class="chips">${fresh?`<button class="btn" data-act="jobsSeen">✓ Mark ${fresh} seen</button>`:''}${c?`<button class="btn" data-act="jobsSync" ${nsJob.busy?'disabled':''}>${I('refresh')} Notion</button>`:''}<button class="btn pri" data-act="addJob">+ Application</button></div></div>
+  <div class="kanban">${JS.map(([k,l],ci)=>{const col=L.filter(j=>j.status===k).sort((a,b)=>(b.fresh?1:0)-(a.fresh?1:0));
+    return `<div class="col"><h4>${l}<span>${col.length}</span></h4>${col.slice(0,kShow[k]?999:6).map(j=>jCard(j,ci,c)).join('')}${col.length>6?`<button class="btn sm ghost" style="width:100%" data-act="kMore" data-k="${k}">${kShow[k]?'Show fewer':`+${col.length-6} more`}</button>`:''}</div>`}).join('')}</div>`;
 }
 
 /* ---------------- GITHUB ---------------- */
@@ -1657,18 +1762,21 @@ function settings(){
 }
 
 /* ---------------- forms ---------------- */
-function form(title,fields,vals,onSave,onDel){
-  $('#modal').innerHTML=`<h3>${title}</h3>${fields.map(f=>{const v=esc(vals[f.k]??'');const inp=f.type==='textarea'?`<textarea name="${f.k}">${v}</textarea>`:f.type==='select'?`<select name="${f.k}">${f.opts.map(o=>{const[val,lab]=Array.isArray(o)?o:[o,o];return `<option value="${esc(val)}" ${String(vals[f.k])===String(val)?'selected':''}>${esc(lab)}</option>`}).join('')}</select>`:`<input name="${f.k}" type="${f.type||'text'}" value="${v}" ${f.type==='number'?'min="0"':''} placeholder="${esc(f.ph||'')}">`;return `<div class="field"><span class="label">${f.label}</span>${inp}</div>`}).join('')}
+function form(title,fields,vals,onSave,onDel,delMsg){
+  $('#modal').innerHTML=`<h3>${title}</h3>${fields.map(f=>{if(f.type==='html')return f.html?`<div class="field">${f.html}</div>`:'';const v=esc(vals[f.k]??'');const inp=f.type==='textarea'?`<textarea name="${f.k}">${v}</textarea>`:f.type==='select'?`<select name="${f.k}">${f.opts.map(o=>{const[val,lab]=Array.isArray(o)?o:[o,o];return `<option value="${esc(val)}" ${String(vals[f.k])===String(val)?'selected':''}>${esc(lab)}</option>`}).join('')}</select>`:`<input name="${f.k}" type="${f.type||'text'}" value="${v}" ${f.type==='number'?'min="0"':''} placeholder="${esc(f.ph||'')}">`;return `<div class="field"><span class="label">${f.label}</span>${inp}</div>`}).join('')}
   <div class="mfoot">${onDel?'<button class="btn danger ghost left" id="mDel">Delete</button>':''}<button class="btn" id="mCancel">Cancel</button><button class="btn pri" id="mSave">Save</button></div>`;
   $('#modalWrap').classList.add('on');setTimeout(()=>$('#modal input, #modal textarea')?.focus(),30);
   $('#mCancel').onclick=closeModal;
-  $('#mSave').onclick=()=>{const o={};fields.forEach(f=>{const el=$(`#modal [name="${f.k}"]`);o[f.k]=f.type==='number'?+el.value:el.value});onSave(o);save();closeModal();render()};
-  if(onDel)$('#mDel').onclick=()=>{if(confirm('Delete this?')){onDel();save();closeModal();render()}};
+  $('#mSave').onclick=()=>{const o={};fields.filter(f=>f.type!=='html').forEach(f=>{const el=$(`#modal [name="${f.k}"]`);o[f.k]=f.type==='number'?+el.value:el.value});onSave(o);save();closeModal();render()};
+  if(onDel)$('#mDel').onclick=()=>{if(confirm(delMsg||'Delete this?')){onDel();save();closeModal();render()}};
 }
 function closeModal(){$('#modalWrap').classList.remove('on')}
 const tracksList=()=>[...new Set(S.roadmap.map(r=>r.track))];
 const sessF=()=>[{k:'date',label:'Date',type:'date'},{k:'topic',label:'What did you study?',ph:'e.g. CS50X pset 2 — caesar'},{k:'track',label:'Track',type:'select',opts:[...tracksList(),'Project','Other']},{k:'minutes',label:'Minutes',type:'number'},{k:'problems',label:'Problems solved (LeetCode etc.)',type:'number'}];
-const jobF=[{k:'company',label:'Company'},{k:'role',label:'Role'},{k:'status',label:'Stage',type:'select',opts:JS},{k:'date',label:'Applied on',type:'date'},{k:'followUp',label:'Follow up on',type:'date'},{k:'link',label:'Posting URL'},{k:'notes',label:'Notes',type:'textarea'}];
+const jobInfo=j=>{const meta=[j.found&&'found '+fmtDate(j.found),j.source,j.resume&&j.resume+' resume'].filter(Boolean),pl=safeUrl(j.link),nl=safeUrl(j.nurl);
+  return j.why||meta.length||pl||nl?`<div class="jinfo">${j.why?`<div class="label" style="margin-bottom:4px">Why it fits</div><div style="margin-bottom:8px">${esc(j.why)}</div>`:''}${meta.length?`<div class="faint mono" style="font-size:12px">${meta.map(esc).join(' · ')}</div>`:''}
+    ${pl||nl?`<div class="chips" style="margin-top:8px">${pl?`<a class="btn sm" href="${esc(pl)}" target="_blank" rel="noopener">Open posting ↗</a>`:''}${nl?`<a class="btn sm" href="${esc(nl)}" target="_blank" rel="noopener">Open in Notion ↗</a>`:''}</div>`:''}</div>`:''};
+const jobF=(j={})=>[{type:'html',html:jobInfo(j)},{k:'company',label:'Company'},{k:'role',label:'Role'},{k:'status',label:'Stage',type:'select',opts:JS},{k:'location',label:'Location'},{k:'pay',label:'Pay'},{k:'type',label:'Job type',type:'select',opts:[['','—'],'Full-time','Part-time','Contract','Temporary']},{k:'date',label:'Applied on',type:'date'},{k:'followUp',label:'Follow up on',type:'date'},{k:'link',label:'Posting URL'},{k:'notes',label:'Notes',type:'textarea'}];
 const skillF=[{k:'name',label:'Skill'},{k:'cat',label:'Category',ph:'Languages, Web, Tools…'},{k:'level',label:'Level (1–5)',type:'select',opts:[[1,'1 · Beginner'],[2,'2 · Learning'],[3,'3 · Comfortable'],[4,'4 · Strong'],[5,'5 · Expert']]},{k:'notes',label:'Evidence / notes'}];
 const projF=[{k:'name',label:'Name'},{k:'status',label:'Status',type:'select',opts:['Planning','Active','Paused','Shipped']},{k:'desc',label:'Description',type:'textarea'},{k:'next',label:'Next action'},{k:'link',label:'Link'}];
 const stepF=[{k:'track',label:'Track (existing or new)'},{k:'step',label:'Step number (optional)',type:'number'},{k:'title',label:'Title'},{k:'status',label:'Status',type:'select',opts:['todo','doing','done']},{k:'notes',label:'Notes'},{k:'url',label:'Link (optional)'}];
@@ -1708,9 +1816,15 @@ const A={
   editSkill:d=>{const s=find('skills',d.id);form('Edit skill',skillF,s,o=>Object.assign(s,o,{level:+o.level}),del('skills',d.id))},
   addProject:()=>form('New project',projF,{status:'Planning'},o=>S.projects.push({id:uid(),...o})),
   editProject:d=>{const p=find('projects',d.id);form('Edit project',projF,p,o=>Object.assign(p,o),del('projects',d.id))},
-  addJob:()=>form('New application',jobF,{status:'applied',date:today(),followUp:addDays(today(),7)},o=>S.jobs.push({id:uid(),...o})),
-  editJob:d=>{const j=find('jobs',d.id);form('Edit application',jobF,j,o=>Object.assign(j,o),del('jobs',d.id))},
-  mv:(d,e)=>{e.stopPropagation();const j=find('jobs',d.id),i=JS.findIndex(x=>x[0]===j.status);j.status=JS[Math.max(0,Math.min(JS.length-1,i+ +d.d))][0];save();render()},
+  addJob:()=>form('New application',jobF(),{status:'applied',date:today(),followUp:addDays(today(),7)},o=>{S.jobs.push({id:uid(),...o});nsSoon()}),
+  editJob:d=>{const j=find('jobs',d.id);if(!j)return;if(j.fresh){delete j.fresh;save(true);render()}
+    form('Edit application',jobF(j),j,o=>{const ch=Object.keys(o).filter(k=>String(j[k]??'')!==String(o[k]??''));Object.assign(j,o);nsTouch(j,ch)},
+      j.nid?()=>{j.status='skipped';nsTouch(j,['status'])}:del('jobs',d.id),j.nid?'Hide this job? It becomes "Skipped" in Notion too. Nothing is deleted.':null)},
+  mv:(d,e)=>{e.stopPropagation();const j=find('jobs',d.id),i=JS.findIndex(x=>x[0]===j.status),ch=['status'];j.status=JS[Math.max(0,Math.min(JS.length-1,i+ +d.d))][0];
+    if(j.status==='applied'&&!j.date){j.date=today();ch.push('date');if(!j.followUp){j.followUp=addDays(today(),7);ch.push('followUp')}}
+    nsTouch(j,ch);save();render()},
+  jobsSeen:()=>{S.jobs.forEach(j=>delete j.fresh);save(true);render()},
+  jobsSync:()=>nsSync('full'),
   addLink:()=>form('New link',[{k:'label',label:'Label'},{k:'url',label:'URL',ph:'https://'}],{},o=>S.links.push({id:uid(),...o})),
   editLink:d=>{const l=find('links',d.id);form('Edit link',[{k:'label',label:'Label'},{k:'url',label:'URL',ph:'https://'}],l,o=>Object.assign(l,o),del('links',d.id))},
   recheck:checkSite,
@@ -1837,7 +1951,7 @@ function cmds(){
     ...(ghIdx?.items||[]).map(n=>({l:`${n.subject} · ${n.topic} — ${n.title}`,k:n.type,f:()=>{noteId=n.id;nView='notes';nSubj=n.subject;nTopic=n.topic;nType='all';nSrc='all';nQ='';go('notes')}})),
     ...(ghIdx?.code||[]).map(c=>({l:`${c.name} — ${c.repo} · ${c.sec}`,k:'code',f:()=>A.openCode({id:c.id})})),
     ...S.roadmap.filter(r=>r.step!=null).map(r=>({l:`Step ${r.step} · ${r.title}`,k:'roadmap',f:()=>{studyTrack=r.track;A.studyTab({t:'roadmap'})}})),
-    ...S.jobs.map(j=>({l:`${j.company} — ${j.role}`,k:'job',f:()=>A.editJob({id:j.id})})),
+    ...jobsLive().map(j=>({l:`${j.company} — ${j.role}`,k:'job',f:()=>A.editJob({id:j.id})})),
     ...S.projects.map(p=>({l:p.name,k:'project',f:()=>A.editProject({id:p.id})})),
   ];
 }
