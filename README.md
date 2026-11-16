@@ -62,11 +62,10 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 ---
 
 ## Upcoming features
-- **Sync back to Notion:** today data only flows *into* OPU/OS. Roadmap status changes and LeetCode revisions made here don't reach Notion, so the Sunday planner can't see them yet. Planned options:
-  1. a weekly "sync to Notion" step done with Claude, or
-  2. full two-way sync through a small serverless proxy (for example, a Cloudflare Worker) that holds the Notion key safely.
-
-Until then, roadmap statuses are updated in Notion, and OPU/OS is used for everything else.
+- **Two-way Notion sync (in progress):** browsers can't call Notion directly, and the Notion key must never be in this public code, so a small private Cloudflare Worker holds the key. It can read and update five databases (job applications, roadmap, tasks, LeetCode problems, projects), create new jobs and projects, and never delete anything. Each device connects once in **Settings → Notion sync** (Worker address + sync key, stored only in that browser).
+  - Done: the Worker and the Settings connection with a per-database health check.
+  - Next, one at a time: Career jobs (with the daily job-search matches) → roadmap status → weekly-plan ticks ↔ Notion tasks → LeetCode practice and projects.
+  - Conflicts are decided field by field: if only one side changed a field, that change wins; if both did, the newer edit wins and the app tells you.
 
 ---
 

@@ -655,6 +655,46 @@ function mergeAutoPlans(list,history=[]){
   return changed;
 }
 
+/* ---------------- two-way Notion sync (Cloudflare Worker) ----------------
+   Browsers can't call Notion directly, and the Notion key must never be in this public file.
+   A private Cloudflare Worker (repo opuos-automation/worker) holds the key and offers
+   /ping, /pull and /push for 5 databases only. Its address + sync key live in localStorage
+   under opuos.notion on each device: never inside S, exports or the Gist. */
+const NSK='opuos.notion',NS_KINDS={jobs:'Job applications',roadmap:'Roadmap',tasks:'Tasks (plan ticks)',leetcode:'LeetCode problems',projects:'My projects'};
+const nsCfg=()=>{try{return JSON.parse(localStorage.getItem(NSK))}catch(e){return null}};
+let nsSt={busy:false,msg:'',kinds:null};
+async function nsApi(path,body){
+  const c=nsCfg();if(!c?.url)throw new Error('Notion sync is not set up');
+  let r;
+  try{r=await fetch(c.url+path,{method:body?'POST':'GET',cache:'no-store',headers:{Authorization:'Bearer '+c.key,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined})}
+  catch(e){throw new Error('Can\'t reach the Worker (offline, wrong address, or ALLOWED_ORIGINS missing this site)')}
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(r.status===401?'Wrong sync key':d.error||'Worker error '+r.status);
+  return d;
+}
+async function nsPing(){
+  nsSt={busy:true,msg:'Testing…',kinds:null};if(view==='settings')render();
+  try{const d=await nsApi('/ping');const k=d.kinds||{},bad=Object.values(k).filter(x=>!x.ok).length;
+    nsSt={busy:false,kinds:k,msg:bad?`${bad} database${bad>1?'s':''} not reachable`:'All databases reachable',at:Date.now()}}
+  catch(e){nsSt={busy:false,kinds:null,msg:e.message,err:true}}
+  if(view==='settings')render();
+}
+function nsCard(){
+  const c=nsCfg(),k=nsSt.kinds,bad=nsSt.err||(k&&Object.values(k).some(x=>!x.ok));
+  const head=`<h3>Notion sync <span class="mono" style="text-transform:none;letter-spacing:0;color:${c?(bad?'var(--amber)':'var(--acc)'):'var(--faint)'}">${c?(bad?'○ problem':'● connected'):'○ off'}</span></h3>`;
+  if(!c)return `<div class="card">${head}<div class="muted" style="font-size:14px;margin-bottom:12px">Two-way sync with Notion through your own Cloudflare Worker. Setup steps are in the private <b>opuos-automation</b> repo (worker/SETUP.md).</div>
+    <div class="field"><span class="label">Worker address</span><input id="nsUrl" placeholder="https://opuos-sync.….workers.dev" autocomplete="off"></div>
+    <div class="field"><span class="label">Sync key</span><input id="nsKey" type="password" placeholder="the SYNC_KEY you set in the Worker" autocomplete="off"></div>
+    <button class="btn pri" data-act="nsOn">Connect &amp; test</button>
+    ${nsSt.msg?`<div class="mono" style="font-size:12px;margin-top:10px;color:${nsSt.err?'var(--amber)':'var(--faint)'}">${esc(nsSt.msg)}</div>`:''}</div>`;
+  return `<div class="card">${head}<div class="faint mono" style="font-size:12px;margin-bottom:10px">${esc(c.url.replace(/^https:\/\//,''))}</div>
+    ${k?`<div class="list">${Object.entries(NS_KINDS).map(([kk,l])=>{const x=k[kk]||{ok:false,error:'not checked'};
+      return `<div class="li" style="padding:7px 0;align-items:flex-start"><div class="grow muted" style="font-size:14px">${esc(l)}${x.missing?.length?`<div class="faint" style="font-size:12px">Missing in Notion: ${x.missing.map(esc).join(', ')}</div>`:''}</div>
+        <div class="mono" style="font-size:12px;text-align:right;color:${x.ok?(x.missing?.length?'var(--amber)':'var(--acc)'):'var(--amber)'}">${x.ok?'● ok':'○ '+esc(x.error||'error')}</div></div>`}).join('')}</div>`:''}
+    <div class="mono" style="font-size:12px;margin:10px 0;color:${nsSt.err?'var(--amber)':'var(--faint)'}">${esc(nsSt.msg||'Not tested on this visit yet.')}</div>
+    <div class="chips"><button class="btn" data-act="nsTest" ${nsSt.busy?'disabled':''}>${I('refresh')} Test connection</button><button class="btn danger" data-act="nsOff">Disconnect</button></div></div>`;
+}
+
 /* ---------------- lock ---------------- */
 /* Owner-only lock. The code holds only a slow, salted PBKDF2 hash of the owner's passphrase —
    never the passphrase. Set or change it with tools/set_owner.py, then push. Visitors can't
@@ -1599,6 +1639,7 @@ function settings(){
       :`<ol class="steps"><li><a href="https://github.com/settings/tokens/new?scopes=gist&description=OPU%2FOS%20sync" target="_blank" rel="noopener">Create a GitHub token ↗</a> with <b>only</b> the <code>gist</code> scope</li><li>Paste it below and connect</li></ol>
         <div class="field"><input id="sTok" type="password" placeholder="ghp_…" autocomplete="off"></div><button class="btn pri" data-act="syncOn">Connect sync</button>
         <div class="faint mono" id="syncDetail" style="font-size:12px;margin-top:10px"></div>`}</div>
+      ${nsCard()}
       <div class="card"><h3>Storage &amp; backups</h3>${(()=>{const size=(localStorage.getItem(KEY)||'').length*2,ls=+localStorage.getItem('opuos.lastsync')||0,bd=daysSince(S.lastBackup);
         const row=(k,v)=>`<div class="li" style="padding:7px 0"><div class="grow muted" style="font-size:14px">${k}</div><div class="mono" style="font-size:12.5px;text-align:right">${v}</div></div>`;
         return `<div class="list">${row('Keep data on this device',persistSt===true?'<span style="color:var(--acc)">● persistent</span>':persistSt===false?`<span style="color:var(--amber)">○ not granted</span> <button class="btn sm" data-act="persist">Ask again</button>`:'<span class="faint">not supported here</span>')}
@@ -1747,6 +1788,12 @@ const A={
   syncOn:()=>{const t=$('#sTok').value.trim();if(t)connectSync(t)},
   syncNow:async()=>{await pullGist();if(syncSt.s!=='err')await pushGist();toast(syncSt.s==='err'?syncSt.msg:'Synced')},
   syncOff:()=>{if(confirm('Disconnect cloud sync on this browser? (Your Gist is kept.)')){localStorage.removeItem(SYNC);setSync('off');render()}},
+  nsOn:()=>{const url=$('#nsUrl').value.trim().replace(/\/+$/,''),key=$('#nsKey').value.trim();
+    if(!/^https:\/\/[^\s/]+$/.test(url))return toast('Paste the Worker address, like https://opuos-sync.you.workers.dev');
+    if(key.length<32)return toast('The sync key looks too short');
+    localStorage.setItem(NSK,JSON.stringify({url,key}));nsPing()},
+  nsTest:()=>nsPing(),
+  nsOff:()=>{if(confirm('Disconnect Notion sync on this browser? (Nothing in Notion changes.)')){localStorage.removeItem(NSK);nsSt={busy:false,msg:'',kinds:null};render()}},
   export:()=>{S.lastBackup=today();save();localStorage.removeItem('opuos.snooze');if(['dash','settings'].includes(view))render();const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download=`opuos-backup-${today()}.json`;a.click()},
   import:()=>{const f=$('#impFile');f.onchange=()=>{const r=new FileReader();r.onload=()=>{let d;try{d=JSON.parse(r.result)}catch(e){return toast('Invalid file')}
       if(d.opuosImport)return mergeImport(d);
