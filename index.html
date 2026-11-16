@@ -216,7 +216,7 @@ main{padding:34px 40px 80px;max-width:1680px;width:100%;margin:0 auto}
 
 /* weekly plan */
 .days{display:flex;flex-direction:column;gap:8px}
-.day{display:grid;grid-template-columns:22px 96px minmax(0,1fr);gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
+.day{display:grid;grid-template-columns:22px 96px minmax(0,1fr) auto;gap:12px;align-items:start;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
 .day.today{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-d)}
 .day.done .pl{color:var(--dim)}
 .day .dn{font-weight:600;font-size:14px}.day .fo{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:2px}
@@ -342,7 +342,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
   .codebox{min-height:0}.codebox pre{font-size:12px}.codebox .lnums{padding:16px 8px}
   .editor textarea,.prose{min-height:60vh}
   .editor input.title{font-size:22px}
-  .day{grid-template-columns:22px minmax(0,1fr)}.day .pl{grid-column:2}
+  .day{grid-template-columns:22px minmax(0,1fr) auto}.day .pl{grid-column:2/4}.day .ed{grid-column:3;grid-row:1}
   .step{flex-wrap:wrap}.step .title{min-width:60%}
   .kanban{grid-template-columns:repeat(5,minmax(220px,80vw))}
   .toast{left:14px;right:14px;bottom:14px;text-align:center}
@@ -647,7 +647,7 @@ function mergeAutoPlans(list,history=[]){
     if(old&&(old.srcKey===key||(!old.srcKey&&old.srcMd===r.md&&!(r.tasks||[]).length)))continue; // unchanged since last time
     const p=parsePlan(r.md,r.week);Object.assign(p,{url:r.url||old?.url,srcMd:r.md,srcKey:key,auto:true});if(r.title)p.title=r.title;
     if(old){p.id=old.id;p.added=old.added;
-      p.days.forEach(x=>{const o=old.days.find(y=>y.day===x.day);if(o){x.done=o.done;x.nDone=o.nDone}});
+      p.days.forEach(x=>{const o=old.days.find(y=>y.day===x.day);if(o){x.done=o.done;x.nDone=o.nDone;if(o.ed){x.ed=o.ed;Object.assign(x,o.ed.set)}}});
       p.outcomes.forEach((x,k)=>{if(old.outcomes[k])x.done=old.outcomes[k].done});
       p.review.forEach(x=>{const o=old.review.find(y=>y.q===x.q);if(o?.a&&!x.a)x.a=o.a});
       S.plans[i]=p}
@@ -733,7 +733,7 @@ const NSYNC={
     label:{}},
   // Notion Tasks (planned in the last 120 days): a copy in S.ntasks. Plan days are ticked from them,
   // and ticking a day in OPU/OS sets its task(s) Done / To Do (see planTasks, daysFromTasks).
-  tasks:{arr:'ntasks',map:{title:'title',date:'date',status:'status'},write:['status'],only:[],urlKey:'url',create:false,name:t=>String(t.title||'').split(' — ')[0],
+  tasks:{arr:'ntasks',map:{title:'title',date:'date',status:'status'},write:['status','title'],only:[],urlKey:'url',create:false,name:t=>String(t.title||'').split(' — ')[0],
     to:(t,a)=>nOrNull(t[a]),from:(a,v)=>v??'',match:null,blank:()=>({title:'',date:'',status:'To Do'}),
     gone:list=>{S.ntasks=S.ntasks.filter(t=>!list.includes(t))},   // deleted in Notion, or now older than 120 days
     afterMerge:()=>tasksSeed(),
@@ -852,9 +852,20 @@ async function nsPush(kind,notes){
   return linked;
 }
 const NS_ON=['jobs','roadmap','tasks','leetcode','projects'];   // every kind the Worker knows
+/* Day edits (focus / plan text) go to that day's row in the "Week of …" page table. A pending edit
+   lives in day.ed {set, old, at} and survives plan refreshes from the Gist until it's sent. */
+async function nsPushPlanRows(notes){
+  for(const p of S.plans)for(const d of p.days){
+    if(!d.ed||!p.url)continue;const ed=d.ed;
+    let r;try{r=await nsApi('/plan-row',{page:p.url,day:d.day.split(/\s+/).slice(0,2).join(' '),set:ed.set,old:ed.old,at:ed.at})}
+    catch(e){notes.push(`${d.day}: ${e.message}`);nsFailed=true;continue}
+    if(d.ed===ed)delete d.ed;   // (not edited again while sending)
+    if(r.keptNotion?.length){r.keptNotion.forEach(k=>{if(r.row[k]!=null)d[k]=r.row[k]});notes.push(`${d.day}: Notion had a newer ${r.keptNotion.join(' and ')}. Kept Notion's.`)}
+  }
+}
 async function nsSync(mode){
   if(!nsCfg()||!S||nsJob.busy)return;
-  const waiting=()=>NS_ON.some(k=>S[NSYNC[k].arr].some(x=>nsPending(k,x)&&(x.nid||!!nsMeta()[k+'Full'])));   // only what can actually be sent
+  const waiting=()=>NS_ON.some(k=>S[NSYNC[k].arr].some(x=>nsPending(k,x)&&(x.nid||!!nsMeta()[k+'Full'])))||S.plans.some(p=>p.url&&p.days.some(d=>d.ed));   // only what can actually be sent
   if(!mode&&!waiting()&&Date.now()-nsJob.at<6e4)return;   // at most one pull a minute unless there's something to send
   nsJob={...nsJob,busy:true};if(['career','study'].includes(view))render();
   let linked=false;const notes=[],errs=[];nsFailed=false;
@@ -868,6 +879,7 @@ async function nsSync(mode){
       linked=(await nsPush(kind,notes))||linked;
     }catch(e){errs.push(`${kind}: ${e.message}`)}
   }
+  try{await nsPushPlanRows(notes)}catch(e){errs.push('plans: '+e.message)}
   nsJob={busy:false,at:Date.now(),msg:errs.join(' · '),err:!!errs.length};
   daysFromTasks();
   if(linked)save();else save(true);   // a new link (nid) is real data other devices should get
@@ -959,7 +971,7 @@ function dash(){
     <div class="card stat"><div class="label">Active applications</div><div class="v">${active}</div><div class="k faint mono" style="font-size:12px">${jobsLive().filter(j=>j.status==='interview').length} interviewing${freshN?` · <span style="color:var(--acc)">${freshN} new</span>`:''}</div></div>
     <div class="card" style="grid-column:1/-1"><h3><span>Today${p?` · ${esc(p.title||'Week of '+fmtDate(p.week))}`:''}</span><span class="chips">${quizReady()?`${reviewQueue().fin.length?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().fin.length} quiz${reviewQueue().fin.length===1?'':'zes'} to finish →</button>`:''}${reviewQueue().show.length-reviewQueue().fin.length>0?`<button class="btn sm" data-act="studyTab" data-t="review" style="color:var(--amber)">${reviewQueue().show.length-reviewQueue().fin.length} review${reviewQueue().show.length-reviewQueue().fin.length===1?'':'s'} due →</button>`:''}`:`<button class="btn sm" data-act="studyTab" data-t="review">Reviews …</button>`}<button class="btn sm ghost" data-act="studyTab" data-t="week">Weekly plan →</button></span></h3>
       ${td?`<div style="display:flex;gap:12px;align-items:flex-start"><button class="ck ${td.d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${td.i}">✓</button><div><div><strong>${esc(td.d.day)}</strong> <span class="pill" style="margin-left:6px">${esc(td.d.focus||'—')}</span></div><div style="margin-top:6px">${inl(esc(td.d.plan))}</div></div></div>`
-      :p?`<div class="empty">Nothing planned for today in this week's plan.</div>`:`<div class="empty">No weekly plan yet. <button class="btn sm" data-act="pastePlan">+ Add weekly plan</button></div>`}
+      :p?`<div class="empty">Nothing planned for today in this week's plan.</div>`:`<div class="empty">No weekly plan yet. It arrives from Notion after your Sunday planner writes it.</div>`}
     </div>
 
     <div class="card span3"><h3>Study activity · last 30 weeks <span class="faint" style="text-transform:none;letter-spacing:0">${S.sessions.length} sessions</span></h3><div id="heat"></div></div>
@@ -1006,7 +1018,7 @@ const stepSort=(a,b)=>(a.step??1e9)-(b.step??1e9);
 const nextUp=()=>S.roadmap.filter(r=>r.status!=='done'&&r.step!=null&&r.step<100).sort(stepSort)[0];
 function study(){
   const rq=quizReady()?reviewQueue().show.length:'…',tabs=[['week','This week'],['review','Review'+(rq?` <span class="mono" style="color:var(--amber)">${rq}</span>`:'')],['quizzes','Quizzes'],['roadmap','Roadmap'],['leetcode','LeetCode'],['sessions','Sessions']];
-  const btns={week:`${syncCfg()?.token?`<button class="btn" data-act="planCheck" title="Check the Notion plans Gist now">${I('refresh')} Check for new plan</button>`:''}<button class="btn pri" data-act="pastePlan">+ Add weekly plan</button>`,
+  const btns={week:`${syncCfg()?.token?`<button class="btn" data-act="planCheck" title="Check the Notion plans Gist now">${I('refresh')} Check for new plan</button>`:''}`,
     roadmap:`<button class="btn" data-act="addStep">+ Roadmap item</button>`,
     review:`<button class="btn pri" data-act="rvAdd">+ Review item</button>`,
     quizzes:`<button class="btn" data-act="ghNotes">${I('refresh')} Re-read GitHub</button>`,
@@ -1130,7 +1142,7 @@ function curPlan(){
 const planToday=p=>{const i=p.days.findIndex(d=>d.date===today());return i<0?null:{i,d:p.days[i]}};
 function studyWeek(){
   const p=curPlan();
-  if(!p)return `<div class="card" style="max-width:640px"><h3>No weekly plan yet</h3><p class="muted" style="margin-bottom:14px">Each Sunday, open the new <b>Week of …</b> page in Notion, press <b>Ctrl+A</b> then <b>Ctrl+C</b>, and paste it here. The day-by-day table becomes a checklist.</p><button class="btn pri" data-act="pastePlan">+ Add weekly plan</button></div>`;
+  if(!p)return `<div class="card" style="max-width:640px"><h3>No weekly plan yet</h3><p class="muted">Your Sunday planner writes a <b>Week of …</b> page in Notion and it arrives here automatically${syncCfg()?.token?' (use <b>Check for new plan</b> to look now)':' once cloud sync is on'}. The day-by-day table becomes a checklist.</p></div>`;
   const ws=weekStart(),nextP=S.plans.find(x=>x.week===addDays(ws,7)),isCur=p.week===ws;
   const dd=p.days.filter(d=>d.done).length,od=p.outcomes.filter(o=>o.done).length;
   const hist=[...S.plans].sort((a,b)=>b.week.localeCompare(a.week)),we=addDays(p.week,6);
@@ -1143,13 +1155,13 @@ function studyWeek(){
   const auto=syncCfg()?.token?`<div class="faint mono" style="font-size:11px;margin:-8px 0 12px">Auto plans from Notion: ${planChk.busy?'<span class="pulse">checking…</span>':esc(planChk.msg||'—')}${planChk.at&&!planChk.busy?' · checked '+ago(new Date(planChk.at).toISOString()):''}${p.auto?' · this plan came in automatically':''}</div>`:'';
   return `${auto}${strip}${nextP&&nextP.id!==p.id?`<div class="banner"><span>📅 Next week's plan is ready: <strong>${esc(nextP.title)}</strong></span><button class="btn sm" data-act="openPlan" data-id="${nextP.id}">View →</button></div>`:''}
   ${planId&&!isCur&&S.plans.some(x=>x.week===ws)?`<div class="banner" style="border-color:var(--line2);background:var(--panel)"><span>Viewing an older week: <b>${esc(p.title)}</b></span><button class="btn sm" data-act="openPlan" data-id="${S.plans.find(x=>x.week===ws).id}">Back to this week</button></div>`
-  :!S.plans.some(x=>x.week===ws)&&!planId?`<div class="banner" style="border-color:rgba(255,198,92,.35);background:rgba(255,198,92,.08)"><span>No plan for this week yet: showing the latest one.${syncCfg()?.token?' It should arrive automatically from Notion.':''}</span><button class="btn sm" data-act="pastePlan">+ Add this week's plan</button></div>`:''}
+  :!S.plans.some(x=>x.week===ws)&&!planId?`<div class="banner" style="border-color:rgba(255,198,92,.35);background:rgba(255,198,92,.08)"><span>No plan for this week yet: showing the latest one.${syncCfg()?.token?' It should arrive automatically from Notion.':''}</span></div>`:''}
   <div class="g g3">
     <div class="card span2"><h3><span>${esc(p.title)}${isCur?' <span class="pill done" style="margin-left:6px">this week</span>':''}</span>
       <span class="chips"><select class="btn sm" id="planSel">${hist.map(x=>`<option value="${x.id}" ${x.id===p.id?'selected':''}>${esc(x.title)}</option>`).join('')}</select>${p.url?`<a class="btn sm" href="${esc(p.url)}" target="_blank" rel="noopener">Notion ↗</a>`:''}<button class="btn sm ghost danger" data-act="delPlan" data-id="${p.id}">Delete</button></span></h3>
       <div style="display:flex;justify-content:space-between" class="mono muted"><span style="font-size:12px">${dd}/${p.days.length} days done</span><span style="font-size:12px">${p.days.length?Math.round(dd/p.days.length*100):0}%</span></div>
       <div class="meter" style="margin:6px 0 16px"><i style="width:${p.days.length?dd/p.days.length*100:0}%"></i></div>
-      <div class="days">${p.days.map((d,i)=>`<div class="day ${d.done?'done':''} ${d.date===today()?'today':''}"><button class="ck ${d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${i}" title="Mark done">✓</button><div><div class="dn">${esc(d.day)}${d.nDone?' <span class="pill done" title="Marked Done in Notion" style="font-size:9px;padding:0 5px">N</span>':''}${nsCfg()&&planTasks(d).mine.some(t=>t.nd)?' <span class="faint" title="Waiting to sync with Notion" style="font-size:11px">⏳</span>':''}</div><div class="fo">${esc(d.focus)}</div></div><div class="pl">${inl(esc(d.plan))}</div></div>`).join('')||'<div class="empty">No day-by-day table found in this plan.</div>'}</div>
+      <div class="days">${p.days.map((d,i)=>`<div class="day ${d.done?'done':''} ${d.date===today()?'today':''}"><button class="ck ${d.done?'on':''}" data-act="pDay" data-p="${p.id}" data-i="${i}" title="Mark done">✓</button><div><div class="dn">${esc(d.day)}${d.nDone?' <span class="pill done" title="Marked Done in Notion" style="font-size:9px;padding:0 5px">N</span>':''}${nsCfg()&&(d.ed||planTasks(d).mine.some(t=>t.nd))?' <span class="faint" title="Waiting to sync with Notion" style="font-size:11px">⏳</span>':''}</div><div class="fo">${esc(d.focus)}</div></div><div class="pl">${inl(esc(d.plan))}</div><button class="btn sm ghost ed" data-act="pDayEdit" data-p="${p.id}" data-i="${i}" title="Edit this day">${I('edit')}</button></div>`).join('')||'<div class="empty">No day-by-day table found in this plan.</div>'}</div>
       ${p.daysNote?`<div class="faint" style="font-size:13px;margin-top:12px">${inl(esc(p.daysNote))}</div>`:''}
       ${nsCfg()?`<div class="faint mono" style="font-size:11px;margin-top:10px">ticks sync with Notion Tasks · ${nsLine()}</div>`:''}
     </div>
@@ -1172,52 +1184,6 @@ after.study=()=>{
   const p=curPlan();if(!p)return;
   document.querySelectorAll('[data-rv]').forEach(t=>t.oninput=()=>{p.review[+t.dataset.rv].a=t.value;save()});
 };
-/* Notion copies rich HTML; convert it to Markdown so tables survive the paste. */
-function htmlToMd(html){
-  const doc=new DOMParser().parseFromString(html,'text/html'),out=[];
-  const inline=n=>[...n.childNodes].map(c=>{if(c.nodeType===3)return c.textContent.replace(/\s+/g,' ');if(c.nodeType!==1)return '';const t=c.tagName,s=inline(c);
-    if(t==='B'||t==='STRONG')return s.trim()?`**${s.trim()}**`:'';if(t==='EM'||t==='I')return s.trim()?`*${s.trim()}*`:'';if(t==='CODE')return '`'+c.textContent+'`';
-    if(t==='A'&&/^https?:/.test(c.getAttribute('href')||''))return `[${s.trim()}](${c.getAttribute('href')})`;if(t==='BR')return '\n';
-    if(/^(DIV|P|LI)$/.test(t))return s+' ';return s}).join('');
-  const walk=(n,depth=0)=>{for(const c of n.childNodes){
-    if(c.nodeType===3){const t=c.textContent.trim();if(t)out.push(t);continue}
-    if(c.nodeType!==1)continue;const t=c.tagName;
-    if(/^H[1-6]$/.test(t))out.push('','#'.repeat(Math.min(+t[1],3))+' '+inline(c).trim(),'');
-    else if(t==='P'){const s=inline(c).trim();if(s)out.push(s,'')}
-    else if(t==='BLOCKQUOTE'){inline(c).trim().split('\n').forEach(x=>out.push('> '+x.trim()));out.push('')}
-    else if(t==='UL'||t==='OL'){[...c.children].forEach((li,i)=>{const own=li.cloneNode(true);own.querySelectorAll('ul,ol').forEach(x=>x.remove());out.push('  '.repeat(depth)+(t==='OL'?`${i+1}. `:'- ')+inline(own).trim());li.querySelectorAll(':scope > ul, :scope > ol').forEach(x=>{const w=document.createElement('div');w.appendChild(x.cloneNode(true));walk(w,depth+1)})});out.push('')}
-    else if(t==='TABLE'){const rows=[...c.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>inline(td).replace(/\|/g,'/').replace(/\s+/g,' ').trim()));if(rows.length){out.push('| '+rows[0].join(' | ')+' |','| '+rows[0].map(()=>'---').join(' | ')+' |');rows.slice(1).forEach(r=>out.push('| '+r.join(' | ')+' |'));out.push('')}}
-    else if(t==='PRE')out.push('```',c.textContent,'```','');
-    else if(t==='HR')out.push('---','');
-    else if(/^(SCRIPT|STYLE|META|TITLE)$/.test(t)){}
-    else walk(c,depth)}};
-  walk(doc.body);return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
-}
-function pastePlanModal(){
-  $('#modal').innerHTML=`<h3>Add weekly plan</h3>
-    <p class="muted" style="font-size:14px;margin:-6px 0 14px">In Notion, open the new <b>Week of …</b> page, press <b>Ctrl+A</b> then <b>Ctrl+C</b>, and paste below.</p>
-    <div class="field"><span class="label">Week starting (Monday)</span><input type="date" id="pWeek" value="${defaultPlanWeek()}"></div>
-    <div class="field"><textarea id="pTxt" style="min-height:240px;font-family:var(--mono);font-size:12.5px" placeholder="Paste the plan here…"></textarea></div>
-    <div id="pPrev" class="mono faint" style="font-size:12px;min-height:18px"></div>
-    <div class="mfoot"><button class="btn" id="mCancel">Cancel</button><button class="btn pri" id="mSave">Save plan</button></div>`;
-  $('#modalWrap').classList.add('on');
-  const ta=$('#pTxt'),wk=$('#pWeek'),pv=$('#pPrev');let weekTouched=false;
-  setTimeout(()=>ta.focus(),30);
-  wk.onchange=()=>weekTouched=true;
-  const preview=()=>{const v=ta.value.trim();if(!v){pv.textContent='';return}
-    const p=parsePlan(v,weekTouched?wk.value:'');if(!weekTouched)wk.value=p.week;
-    pv.innerHTML=`Found: <span style="color:var(--acc)">${esc(p.title)}</span> · ${p.days.length} days · ${p.outcomes.length} outcomes · ${p.watch.length} watch-outs${p.days.length?'':' — <span style="color:var(--amber)">no day-by-day table found</span>'}`};
-  ta.addEventListener('paste',e=>{const h=e.clipboardData?.getData('text/html');if(h&&/<(table|h[1-6]|li)\b/i.test(h)){e.preventDefault();const m=htmlToMd(h);ta.setRangeText(m,ta.selectionStart,ta.selectionEnd,'end');preview()}});
-  ta.oninput=preview;
-  $('#mCancel').onclick=closeModal;
-  $('#mSave').onclick=()=>{const v=ta.value.trim();if(!v)return toast('Paste a plan first');
-    const p=parsePlan(v,wk.value),i=S.plans.findIndex(x=>x.week===p.week);
-    if(i>=0){if(!confirm(`Replace the existing plan for ${p.title}?`))return;
-      const old=S.plans[i];p.days.forEach((d,k)=>{if(old.days[k]&&old.days[k].day===d.day)d.done=old.days[k].done});p.review.forEach((r,k)=>{if(old.review[k]?.a&&!r.a)r.a=old.review[k].a});p.url||=old.url;S.plans[i]=p}
-    else S.plans.push(p);
-    planId=null;studyTab='week';save();closeModal();go('study');toast('Weekly plan saved')};
-}
-
 /* ----- LeetCode revision ----- */
 const lcRevised=()=>S.leetcode.filter(p=>p.last&&p.last>=S.lcRound).length;
 const lcSlug=n=>n.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
@@ -1927,12 +1893,23 @@ const A={
   ghSync:()=>{toast('Syncing…');syncGH()},
   /* study */
   studyTab:d=>{rvShow=10;studyTab=d.t;planId=null;go('study')},
-  pastePlan:pastePlanModal,
   openPlan:d=>{planId=d.id;render()},
   delPlan:d=>{if(confirm('Delete this weekly plan?')){S.plans=S.plans.filter(p=>p.id!==d.id);planId=null;save();render()}},
   pDay:d=>{const p=S.plans.find(x=>x.id===d.p),x=p.days[+d.i];x.done=!x.done;x.nDone=false;
     if(nsCfg())planTasks(x).mine.forEach(t=>{const st=x.done?'Done':'To Do';if(t.status!==st){t.status=st;nsTouch('tasks',t,['status'])}});
     save();render();if(x.done&&p.days.every(y=>y.done))toast('Whole week done 🎉')},
+  pDayEdit:d=>{const p=S.plans.find(x=>x.id===d.p),x=p?.days[+d.i];if(!x)return;
+    const lbl=x.day.split(/\s+/).slice(0,2).join(' '),task=nsCfg()?planTasks(x).mine[0]:null,pre=lbl+' — ';
+    const tRest=task?(String(task.title).toLowerCase().startsWith(pre.toLowerCase())?task.title.slice(pre.length):String(task.title).slice(lbl.length).replace(/^\s*[—–-]?\s*/,'')):'';
+    const where=!nsCfg()?'Changes stay in OPU/OS (Notion sync is off).':`${p.url?'Focus and plan update this day in the Notion page <b>'+esc(p.title)+'</b>.':'This plan has no Notion page: focus and plan stay in OPU/OS.'}${task?' The task title updates the task in Notion Tasks.':' No Notion task matches this day.'}`;
+    form('Edit '+esc(x.day),[{type:'html',html:`<div class="jinfo faint" style="font-size:12px">${where}</div>`},{k:'focus',label:'Focus'},{k:'plan',label:'Plan',type:'textarea'},
+      ...(task?[{k:'task',label:'Task title (after "'+esc(pre.trim())+'")'}]:[])],{focus:x.focus,plan:x.plan,task:tRest},o=>{
+      const ch={};['focus','plan'].forEach(k=>{if(String(o[k]??'').trim()!==String(x[k]??'').trim())ch[k]=String(o[k]??'').trim()});
+      if(Object.keys(ch).length){
+        if(nsCfg()&&p.url){const ed=x.ed||{set:{},old:{}};Object.keys(ch).forEach(k=>{if(!(k in ed.set))ed.old[k]=x[k]??'';ed.set[k]=ch[k]});ed.at=new Date().toISOString();x.ed=ed}
+        Object.assign(x,ch)}
+      if(task){const t=pre+String(o.task||'').trim();if(o.task.trim()&&t!==task.title){task.title=t;nsTouch('tasks',task,['title'])}}
+      nsSoon()})},
   pOut:d=>{const o=S.plans.find(x=>x.id===d.p).outcomes[+d.i];o.done=!o.done;save();render()},
   reviewToJournal:d=>{const p=S.plans.find(x=>x.id===d.id);const n={id:uid(),type:'journal',kind:'review',date:today(),title:'Weekly review — '+p.title,body:p.review.map(r=>`## ${r.q}\n\n${r.a}\n`).join('\n'),tags:[],subject:'',topic:'',updated:Date.now()};S.notes.push(n);jId=n.id;nView='journal';noteMode='view';save();go('notes');toast('Saved to journal')},
   lcF:d=>{lcF=d.f;render()},
@@ -2045,7 +2022,7 @@ function cmds(){
     {l:'Log study session',k:'study',f:()=>A.logSession({})},{l:'New application',k:'career',f:A.addJob},
     {l:'New note',k:'notes',f:()=>A.newNote({})},{l:"Today's journal entry",k:'journal',f:()=>A.newJournal({k:'daily'})},
     {l:'Sync GitHub',k:'github',f:()=>syncGH()},
-    {l:"This week's plan",k:'study',f:()=>A.studyTab({t:'week'})},{l:'Add weekly plan',k:'study',f:pastePlanModal},{l:'LeetCode revision',k:'study',f:()=>A.studyTab({t:'leetcode'})},{l:'Roadmap',k:'study',f:()=>A.studyTab({t:'roadmap'})},
+    {l:"This week's plan",k:'study',f:()=>A.studyTab({t:'week'})},{l:'LeetCode revision',k:'study',f:()=>A.studyTab({t:'leetcode'})},{l:'Roadmap',k:'study',f:()=>A.studyTab({t:'roadmap'})},
     {l:'Weekly review entry',k:'journal',f:()=>A.newJournal({k:'review'})},{l:'Review queue',k:'study',f:()=>A.studyTab({t:'review'})},{l:'Quiz scores',k:'study',f:()=>A.studyTab({t:'quizzes'})},{l:'Refresh GitHub notes',k:'notes',f:()=>loadGhNotes(true)},{l:'Export backup',k:'data',f:A.export},{l:'Lock',k:'system',f:lock},
     ...S.notes.map(n=>({l:n.title||'Untitled',k:n.type,f:()=>{if(isJ(n)){jId=n.id;nView='journal'}else{noteId=n.id;nView='notes';nSubj=nTopic=nQ='';nType=nSrc='all'}go('notes')}})),
     ...(ghIdx?.items||[]).map(n=>({l:`${n.subject} · ${n.topic} — ${n.title}`,k:n.type,f:()=>{noteId=n.id;nView='notes';nSubj=n.subject;nTopic=n.topic;nType='all';nSrc='all';nQ='';go('notes')}})),
