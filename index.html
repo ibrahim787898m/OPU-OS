@@ -484,6 +484,7 @@ function migrate(){
   S.settings.noteRepos??=['math','dsa','cs50x'];
   S.settings.codeRepos??=['CS50P','leetcode-solutions','dsa','math']; // cs50x left out on purpose (academic honesty)
   S.plans??=[];S.ntasks??=[];S.nsIgnore??={};S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
+  (S.jobs||[]).forEach(j=>{if(j.status==='rejected'&&j.stage==='No Answer')j.status='noanswer'});   // 7 stages now (was one "Closed" row)
   S.notes.forEach(n=>{n.tags??=[];n.subject??='';n.topic??='';if(n.type==='journal')n.date??=dstr(new Date(n.updated||Date.now()))});
 }
 function save(quiet){if(!quiet)S._t=Date.now();
@@ -713,7 +714,7 @@ function nsCard(){
    the "old" side of a change; for a field still waiting, the value from BEFORE the wait),
    nd {f:[app fields changed here], at} (waiting to go to Notion). Jobs also: nurl, fresh (NEW
    badge), gone (deleted in Notion: hidden) and Notion-only fields found, resume, source, why,
-   stage (raw Notion stage, to keep "No Answer" apart from "Rejected"). Roadmap: url = its page.
+   stage (raw Notion stage). Stages map one to one with Notion's 7 (STAGE_IN). Roadmap: url = its page.
    Order is always pull → push, so items made in the app get matched before anything is created.
    Pull results are saved quietly (save(true)): every device pulls Notion itself, so they must
    not look like new edits to the Gist sync. */
@@ -722,13 +723,14 @@ const nsMeta=()=>{try{return JSON.parse(localStorage.getItem(NSM))||{}}catch(e){
 const setNsMeta=m=>localStorage.setItem(NSM,JSON.stringify(m));
 const nidOf=x=>String(x||'').replace(/-/g,'').toLowerCase();
 const J2N={company:'company',role:'role',status:'stage',link:'link',date:'applied',followUp:'followUp',notes:'notes',location:'location',pay:'pay',type:'type'};
-const STAGE_IN={'To apply':'wishlist','Applied':'applied','Interview':'interview','Offer':'offer','Rejected':'rejected','No Answer':'rejected','Skipped':'skipped'};
+const STAGE_IN={'To apply':'wishlist','Applied':'applied','Interview':'interview','Offer':'offer','Rejected':'rejected','No Answer':'noanswer','Skipped':'skipped'};
+const STAGE_OUT=Object.fromEntries(Object.entries(STAGE_IN).map(([n,a])=>[a,n]));   // the app's 7 stages = Notion's 7, one to one
 const RST={todo:'Not started',doing:'In progress',done:'Done'},RST_IN={'Not started':'todo','In progress':'doing','Done':'done'};
 const nOrNull=v=>v===''||v==null?null:v;
 const jKey=(c,r)=>(String(c||'').trim()+'|'+String(r||'').trim()).toLowerCase();
 const NSYNC={
   jobs:{arr:'jobs',map:J2N,write:Object.keys(J2N),only:['found','resume','source','why','stage'],urlKey:'nurl',create:true,name:j=>j.company,
-    to:(j,a)=>a==='status'?({wishlist:'To apply',applied:'Applied',interview:'Interview',offer:'Offer',skipped:'Skipped',rejected:j.stage==='No Answer'?'No Answer':'Rejected'}[j.status]||'To apply'):nOrNull(j[a]),
+    to:(j,a)=>a==='status'?(STAGE_OUT[j.status]||'To apply'):nOrNull(j[a]),
     from:(a,v)=>a==='status'?(STAGE_IN[v]||'wishlist'):(v??''),
     match:(x,r)=>jKey(x.company,x.role)===jKey(r.f.company,r.f.role),
     blank:()=>({company:'',role:'',status:'wishlist',date:'',followUp:'',link:'',notes:'',fresh:true}),
@@ -804,7 +806,8 @@ function tasksSeed(){   // first sync only: days already ticked in OPU/OS are se
   S.plans.forEach(p=>p.days.forEach(d=>{if(!d.done)return;planTasks(d).mine.filter(t=>!isDone(t)).forEach(t=>{t.status='Done';nsTouch('tasks',t,['status'])})}));
   S.tasksSeeded=true;
 }
-const jobsLive=()=>S.jobs.filter(j=>!j.gone&&j.status!=='skipped');
+const jobsLive=()=>S.jobs.filter(j=>!j.gone);
+const CLOSED=['offer','rejected','noanswer','skipped'];   // no follow-up reminders for these
 /* A job that reaches Applied gets Applied on (today, if empty) and Follow up (+7 days, if empty), so it
    shows in Dashboard → Follow-ups due wherever it was marked Applied. Only on the move to Applied:
    clearing the follow-up later on purpose stays cleared. */
@@ -969,9 +972,9 @@ const after={};
 /* ---------------- DASHBOARD ---------------- */
 function dash(){
   const h=new Date().getHours(),greet=h<12?'Good morning':h<18?'Good afternoon':'Good evening';
-  const wm=weekMinutes(),goal=S.settings.weeklyGoal*60,active=jobsLive().filter(j=>['applied','interview'].includes(j.status)).length,freshN=jobsLive().filter(j=>j.fresh).length;
+  const wm=weekMinutes(),goal=S.settings.weeklyGoal*60,active=jobsLive().filter(j=>['applied','interview'].includes(j.status)).length,freshN=jobsLive().filter(j=>j.fresh&&j.status!=='skipped').length;
   const doing=S.roadmap.filter(r=>r.status==='doing');
-  const due=jobsLive().filter(j=>j.followUp&&j.followUp<=addDays(today(),3)&&!['rejected','offer'].includes(j.status)).sort((a,b)=>a.followUp.localeCompare(b.followUp));
+  const due=jobsLive().filter(j=>j.followUp&&j.followUp<=addDays(today(),3)&&!CLOSED.includes(j.status)).sort((a,b)=>a.followUp.localeCompare(b.followUp));
   const gh=S.gh,nx=nextUp(),p=curPlan(),td=p?planToday(p):null;
   const tracks=tracksList().map(t=>[t,S.roadmap.filter(r=>r.track===t).length]).sort((a,b)=>b[1]-a[1]).slice(0,4).map(x=>x[0]);
   return `
@@ -1293,7 +1296,7 @@ const pctColor=p=>p==null?'var(--faint)':p>=90?'var(--acc)':p>=75?'var(--amber)'
 /* Quizzes tab: one collapsible row per topic. A topic starts open only when it has an
    unfinished quiz; your open/close choices are remembered ("opuos.qopen"). */
 let qSubj='all',qSort='order',qVisible=[];
-let rvShow=10,nShow=30,rdOpen={},kShow={}; // paging / folding for long lists
+let rvShow=10,nShow=30,rdOpen={},kShow={},kFold={skipped:true}; // paging / folding for long lists
 const qOpen=(()=>{try{return JSON.parse(localStorage.getItem('opuos.qopen'))||{}}catch(e){return {}}})();
 const qIsOpen=g=>qOpen[g.k]??(g.unf>0);
 const qSaveOpen=()=>localStorage.setItem('opuos.qopen',JSON.stringify(qOpen));
@@ -1433,7 +1436,7 @@ function projects(){
 }
 
 /* ---------------- CAREER ---------------- */
-const JS=[['wishlist','To apply'],['applied','Applied'],['interview','Interview'],['offer','Offer'],['rejected','Closed']];
+const JS=[['wishlist','To apply'],['applied','Applied'],['interview','Interview'],['offer','Offer'],['rejected','Rejected'],['noanswer','No Answer'],['skipped','Skipped']];
 function jCard(j,ci,c){
   const tags=[j.location,j.pay,j.type].filter(Boolean).map(esc).join(' · ');
   return `<div class="jcard${j.fresh?' fresh':''}" data-act="editJob" data-id="${j.id}"><div class="co">${j.fresh?'<span class="newb">NEW</span>':''}${esc(j.company)}${c&&(j.nd||!j.nid)?' <span class="faint" title="Waiting to sync with Notion" style="font-size:11px">⏳</span>':''}</div><div class="ro">${esc(j.role)}</div>
@@ -1442,15 +1445,16 @@ function jCard(j,ci,c){
     <span class="mv">${ci>0?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="-1" title="Move up to ${esc(JS[ci-1][1])}" aria-label="Move up to ${esc(JS[ci-1][1])}">↑</button>`:''}${ci<JS.length-1?`<button class="btn sm ghost" data-act="mv" data-id="${j.id}" data-d="1" title="Move down to ${esc(JS[ci+1][1])}" aria-label="Move down to ${esc(JS[ci+1][1])}">↓</button>`:''}</span></div></div>`;
 }
 function career(){
-  const L=jobsLive(),n=k=>L.filter(j=>j.status===k).length,fresh=L.filter(j=>j.fresh).length,c=nsCfg();
+  const L=jobsLive(),n=k=>L.filter(j=>j.status===k).length,fresh=L.filter(j=>j.fresh&&j.status!=='skipped').length,c=nsCfg();
   const wait=c?L.filter(j=>j.nd||!j.nid).length:0;
   const st=nsLine()+(c&&!nsJob.busy&&!nsJob.err&&wait?` · ⏳ ${wait} waiting`:'');
-  return `<div class="head"><div><h2>Career</h2><div class="sub">Job hunt + co-op pipeline. ${L.length} tracked · ${n('interview')} interviewing${fresh?` · <span style="color:var(--acc)">${fresh} new match${fresh>1?'es':''}</span>`:''}.</div>${st?`<div class="mono" style="font-size:12px;margin-top:6px">${st}</div>`:''}</div>
+  return `<div class="head"><div><h2>Career</h2><div class="sub">Job hunt + co-op pipeline. ${L.length-n('skipped')} tracked · ${n('interview')} interviewing${fresh?` · <span style="color:var(--acc)">${fresh} new match${fresh>1?'es':''}</span>`:''}.</div>${st?`<div class="mono" style="font-size:12px;margin-top:6px">${st}</div>`:''}</div>
     <div class="chips">${fresh?`<button class="btn" data-act="jobsSeen">✓ Mark ${fresh} seen</button>`:''}${c?`<button class="btn" data-act="jobsSync" ${nsJob.busy?'disabled':''}>${I('refresh')} Notion</button>`:''}<button class="btn pri" data-act="addJob">+ Application</button></div></div>
   <div class="stages">${JS.map(([k,l],ci)=>{const col=L.filter(j=>j.status===k).sort((a,b)=>(b.fresh?1:0)-(a.fresh?1:0)),all=!!kShow[k];
     if(!col.length)return `<div class="stage empty"><h4>${l} <span class="n">0</span> <span class="none">· nothing here yet</span></h4></div>`;
+    if(kFold[k])return `<div class="stage empty"><h4>${l} <span class="n">${col.length}</span><span class="sp"></span><button class="btn sm ghost" data-act="kFold" data-k="${k}">Show</button></h4></div>`;
     return `<div class="stage"><h4>${l} <span class="n">${col.length}</span><span class="sp"></span>
-      ${col.length>1?`<button class="btn sm ghost" data-act="kMore" data-k="${k}">${all?'Slide':'Show all'}</button>`:''}
+      ${col.length>1?`<button class="btn sm ghost" data-act="kMore" data-k="${k}">${all?'Slide':'Show all'}</button>`:''}${k==='skipped'?`<button class="btn sm ghost" data-act="kFold" data-k="${k}">Hide</button>`:''}
       ${all?'':`<span class="karr"><button class="btn sm ghost" data-act="kSlide" data-k="${k}" data-d="-1" title="Previous"><span style="display:inline-flex;transform:scaleX(-1)">${I('chev')}</span></button><button class="btn sm ghost" data-act="kSlide" data-k="${k}" data-d="1" title="Next">${I('chev')}</button></span>`}</h4>
       <div class="kslide${all?' all':''}" data-k="${k}">${col.map(j=>jCard(j,ci,c)).join('')}</div></div>`}).join('')}</div>`;
 }
@@ -1916,7 +1920,7 @@ const A={
   addJob:()=>form('New application',jobF(),{status:'applied',date:today(),followUp:addDays(today(),7)},o=>{S.jobs.push({id:uid(),...o});nsSoon()}),
   editJob:d=>{const j=find('jobs',d.id);if(!j)return;if(j.fresh){delete j.fresh;save(true);render()}
     form('Edit application',jobF(j),j,o=>{const ch=Object.keys(o).filter(k=>String(j[k]??'')!==String(o[k]??''));Object.assign(j,o);nsTouch('jobs',j,ch);if(ch.includes('status')&&j.status==='applied')jobFill(j)},
-      j.nid?()=>{j.status='skipped';nsTouch('jobs',j,['status'])}:del('jobs',d.id),j.nid?'Hide this job? It becomes "Skipped" in Notion too. Nothing is deleted.':null)},
+      j.nid?()=>{j.status='skipped';nsTouch('jobs',j,['status'])}:del('jobs',d.id),j.nid?'Move this job to Skipped? It moves in Notion too. Nothing is deleted.':null)},
   mv:(d,e)=>{e.stopPropagation();const j=find('jobs',d.id),i=JS.findIndex(x=>x[0]===j.status),ch=['status'];j.status=JS[Math.max(0,Math.min(JS.length-1,i+ +d.d))][0];
     nsTouch('jobs',j,ch);if(j.status==='applied')jobFill(j);save();render()},
   jobsSeen:()=>{S.jobs.forEach(j=>delete j.fresh);save(true);render()},
@@ -1960,6 +1964,7 @@ const A={
   rvMore:()=>{rvShow+=10;render()},
   nMore:()=>{nShow+=30;render()},
   rdDone:()=>{rdOpen[studyTrack]=!(rdOpen[studyTrack]??false);render()},
+  kFold:d=>{kFold[d.k]=!kFold[d.k];render()},
   kMore:d=>{kShow[d.k]=!kShow[d.k];if(kShow[d.k])kScroll[d.k]=0;render()},
   kSlide:d=>{const el=document.querySelector(`.kslide[data-k="${d.k}"]`);if(el)el.scrollBy({left:+d.d*Math.max(260,el.clientWidth*.9),behavior:'smooth'})},
   qToggle:d=>{qOpen[d.k]=d.open!=='1';qSaveOpen();render()},
