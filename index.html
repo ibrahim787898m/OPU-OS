@@ -699,99 +699,121 @@ function nsCard(){
     <div class="chips"><button class="btn" data-act="nsTest" ${nsSt.busy?'disabled':''}>${I('refresh')} Test connection</button><button class="btn danger" data-act="nsOff">Disconnect</button></div></div>`;
 }
 
-/* ----- jobs ⇄ Notion "Applications" (phase 2) -----
-   A job from Notion keeps: nid/nurl (its page), nf (the Notion values last seen = the "old"
-   side of a change), nd {f:[app fields changed here], at} (waiting to go to Notion),
-   fresh (NEW badge), gone (deleted in Notion: hidden). Notion-only fields: found, resume,
-   source, why, stage (raw Notion stage, to keep "No Answer" apart from "Rejected").
-   Order is always pull → push, so jobs made in the app get matched (company + role)
-   before anything is created. Pull results are saved quietly (save(true)): every device
-   pulls Notion itself, so they must not look like new edits to the Gist sync. */
+/* ----- Notion sync engine (phase 2 jobs, phase 3 roadmap) -----
+   Each synced item keeps: nid (its Notion page, no dashes), nf (the Notion values last seen =
+   the "old" side of a change; for a field still waiting, the value from BEFORE the wait),
+   nd {f:[app fields changed here], at} (waiting to go to Notion). Jobs also: nurl, fresh (NEW
+   badge), gone (deleted in Notion: hidden) and Notion-only fields found, resume, source, why,
+   stage (raw Notion stage, to keep "No Answer" apart from "Rejected"). Roadmap: url = its page.
+   Order is always pull → push, so items made in the app get matched before anything is created.
+   Pull results are saved quietly (save(true)): every device pulls Notion itself, so they must
+   not look like new edits to the Gist sync. */
 const NSM='opuos.nsmeta';
 const nsMeta=()=>{try{return JSON.parse(localStorage.getItem(NSM))||{}}catch(e){return {}}};
 const setNsMeta=m=>localStorage.setItem(NSM,JSON.stringify(m));
+const nidOf=x=>String(x||'').replace(/-/g,'').toLowerCase();
 const J2N={company:'company',role:'role',status:'stage',link:'link',date:'applied',followUp:'followUp',notes:'notes',location:'location',pay:'pay',type:'type'};
-const JN_ONLY=['found','resume','source','why','stage'];
 const STAGE_IN={'To apply':'wishlist','Applied':'applied','Interview':'interview','Offer':'offer','Rejected':'rejected','No Answer':'rejected','Skipped':'skipped'};
-const jToN=(j,a)=>a==='status'?({wishlist:'To apply',applied:'Applied',interview:'Interview',offer:'Offer',skipped:'Skipped',rejected:j.stage==='No Answer'?'No Answer':'Rejected'}[j.status]||'To apply'):(j[a]===''||j[a]==null?null:j[a]);
-const jFromN=(a,v)=>a==='status'?(STAGE_IN[v]||'wishlist'):(v??'');
-const jobsLive=()=>S.jobs.filter(j=>!j.gone&&j.status!=='skipped');
+const RST={todo:'Not started',doing:'In progress',done:'Done'},RST_IN={'Not started':'todo','In progress':'doing','Done':'done'};
+const nOrNull=v=>v===''||v==null?null:v;
 const jKey=(c,r)=>(String(c||'').trim()+'|'+String(r||'').trim()).toLowerCase();
+const NSYNC={
+  jobs:{arr:'jobs',map:J2N,write:Object.keys(J2N),only:['found','resume','source','why','stage'],urlKey:'nurl',create:true,name:j=>j.company,
+    to:(j,a)=>a==='status'?({wishlist:'To apply',applied:'Applied',interview:'Interview',offer:'Offer',skipped:'Skipped',rejected:j.stage==='No Answer'?'No Answer':'Rejected'}[j.status]||'To apply'):nOrNull(j[a]),
+    from:(a,v)=>a==='status'?(STAGE_IN[v]||'wishlist'):(v??''),
+    match:(x,r)=>jKey(x.company,x.role)===jKey(r.f.company,r.f.role),
+    blank:()=>({company:'',role:'',status:'wishlist',date:'',followUp:'',link:'',notes:'',fresh:true}),
+    gone:list=>list.forEach(j=>{j.gone=true;delete j.nd}),
+    label:{stage:'stage',applied:'applied date',followUp:'follow-up'}},
+  roadmap:{arr:'roadmap',map:{title:'title',step:'step',track:'track',status:'status',notes:'notes'},write:['status','notes'],only:['phase'],urlKey:'url',create:false,name:r=>r.title,
+    to:(r,a)=>a==='status'?(RST[r.status]||'Not started'):nOrNull(r[a]),
+    from:(a,v)=>a==='status'?(RST_IN[v]||'todo'):a==='step'?(v==null||v===0||isNaN(v)?null:+v):a==='track'?(v||'Other'):(v??''),
+    match:null,blank:()=>({title:'',track:'Other',step:null,status:'todo',notes:''}),
+    gone:list=>{S.roadmap=S.roadmap.filter(r=>!list.includes(r))},   // deleted in Notion: the step leaves the roadmap here too
+    label:{}},
+};
+const jobsLive=()=>S.jobs.filter(j=>!j.gone&&j.status!=='skipped');
 const safeUrl=u=>/^https?:\/\//i.test(String(u||'').trim())?String(u).trim():'';
 let nsJob={busy:false,at:0,msg:'',err:false},nsT=null;
 const nsSoon=()=>{if(!nsCfg())return;clearTimeout(nsT);nsT=setTimeout(()=>nsSync(),2500)};
-function nsTouch(j,fields){
-  const f=new Set([...(j.nd?.f||[]),...fields.filter(a=>J2N[a])]);if(!f.size)return;
-  j.nd={f:[...f],at:new Date().toISOString()};nsSoon();
+function nsTouch(kind,it,fields){
+  const K=NSYNC[kind];if(!it.nid&&!K.create)return;   // e.g. a roadmap step typed into the app: stays local
+  const f=new Set([...(it.nd?.f||[]),...fields.filter(a=>K.write.includes(a))]);if(!f.size)return;
+  it.nd={f:[...f],at:new Date().toISOString()};nsSoon();
 }
-function nsApplyRow(j,r,keep=[]){   // copy Notion's values in, except fields still waiting to be pushed
-  j.nid=r.nid;j.nurl=r.url;delete j.gone;
-  for(const[a,n]of Object.entries(J2N))if(n in r.f&&!keep.includes(a))j[a]=jFromN(a,r.f[n]);
-  JN_ONLY.forEach(k=>j[k]=r.f[k]??'');
+function nsApplyRow(K,it,r,keep=[]){   // copy Notion's values in, except fields still waiting to be pushed
+  it.nid=r.nid;if(r.url)it[K.urlKey]=r.url;delete it.gone;
+  for(const[a,n]of Object.entries(K.map))if(n in r.f&&!keep.includes(a))it[a]=K.from(a,r.f[n]);
+  K.only.forEach(k=>{if(k in r.f)it[k]=r.f[k]??''});
   // for fields still waiting, keep the OLD Notion value: it's the base the Worker compares against
-  const nf={...r.f};keep.forEach(a=>{const n=J2N[a];if(n){if(j.nf&&n in j.nf)nf[n]=j.nf[n];else delete nf[n]}});j.nf=nf;
+  const nf={...r.f};keep.forEach(a=>{const n=K.map[a];if(n){if(it.nf&&n in it.nf)nf[n]=it.nf[n];else delete nf[n]}});it.nf=nf;
 }
-function nsMergeJobs(rows,full){
-  let linked=false;const seen=new Set();
+function nsMerge(kind,rows,full){
+  const K=NSYNC[kind];let linked=false;const seen=new Set();
   for(const r of rows){
-    seen.add(r.nid);let j=S.jobs.find(x=>x.nid===r.nid);
-    if(!j){j=S.jobs.find(x=>!x.nid&&!x.gone&&jKey(x.company,x.role)===jKey(r.f.company,r.f.role));
-      if(j){linked=true;   // a job typed into the app that is also in Notion: link, and send what only the app knows
-        const extra=Object.keys(J2N).filter(a=>a!=='status'&&j[a]!==''&&j[a]!=null&&(r.f[J2N[a]]==null||r.f[J2N[a]]===''));
-        if(extra.length)j.nd={f:[...new Set([...(j.nd?.f||[]),...extra])],at:new Date().toISOString()}}}
-    if(!j){j={id:uid(),company:'',role:'',status:'wishlist',date:'',followUp:'',link:'',notes:'',fresh:true};S.jobs.push(j)}
-    nsApplyRow(j,r,j.nd?.f||[]);
+    seen.add(r.nid);let it=S[K.arr].find(x=>x.nid&&nidOf(x.nid)===r.nid);
+    if(!it&&K.match){it=S[K.arr].find(x=>!x.nid&&!x.gone&&K.match(x,r));
+      if(it){linked=true;   // typed into the app and also in Notion: link, and send what only the app knows
+        const extra=K.write.filter(a=>a!=='status'&&it[a]!==''&&it[a]!=null&&(r.f[K.map[a]]==null||r.f[K.map[a]]===''));
+        if(extra.length)it.nd={f:[...new Set([...(it.nd?.f||[]),...extra])],at:new Date().toISOString()}}}
+    if(!it){it={id:uid(),...K.blank()};S[K.arr].push(it)}
+    nsApplyRow(K,it,r,it.nd?.f||[]);
   }
-  // a full pull lists every job: linked ones missing from it were deleted in Notion (hide, never delete here)
-  const linkedN=S.jobs.filter(j=>j.nid&&!j.gone).length;
-  if(full&&(rows.length||linkedN<=3))S.jobs.forEach(j=>{if(j.nid&&!seen.has(j.nid)){j.gone=true;delete j.nd}});
+  // a full pull lists every row: linked items missing from it were deleted in Notion
+  const linkedList=S[K.arr].filter(x=>x.nid&&!x.gone);
+  if(full&&(rows.length||linkedList.length<=3))K.gone(linkedList.filter(x=>!seen.has(nidOf(x.nid))));
   return linked;
 }
-async function nsPushJobs(notes){
-  let linked=false;const ready=!!nsMeta().jobsFull;
-  const list=S.jobs.filter(j=>!j.gone&&(j.nid?j.nd:ready));   // unlinked jobs are created only after a full pull matched them
+async function nsPush(kind,notes){
+  const K=NSYNC[kind],ready=!!nsMeta()[kind+'Full'];let linked=false;
+  const list=S[K.arr].filter(x=>!x.gone&&(x.nid?x.nd:(K.create&&ready)));   // unlinked items are created only after a full pull matched them
   for(let i=0;i<list.length;i+=15){
     const batch=list.slice(i,i+15),sent={};
-    const changes=batch.map(j=>{
-      const fields=j.nid?j.nd.f:Object.keys(J2N).filter(a=>a==='status'||(j[a]!==''&&j[a]!=null));
-      const set={},old={};fields.forEach(a=>{set[J2N[a]]=jToN(j,a);old[J2N[a]]=j.nf?.[J2N[a]]??null});
-      sent[j.id]=Object.fromEntries(fields.map(a=>[a,j[a]]));
-      return j.nid?{kind:'jobs',ref:j.id,nid:j.nid,set,old,at:j.nd.at}:{kind:'jobs',ref:j.id,set};
+    const changes=batch.map(x=>{
+      const fields=x.nid?x.nd.f:K.write.filter(a=>a==='status'||(x[a]!==''&&x[a]!=null));
+      const set={},old={};fields.forEach(a=>{set[K.map[a]]=K.to(x,a);old[K.map[a]]=x.nf?.[K.map[a]]??null});
+      sent[x.id]=Object.fromEntries(fields.map(a=>[a,x[a]]));
+      return x.nid?{kind,ref:x.id,nid:nidOf(x.nid),set,old,at:x.nd.at}:{kind,ref:x.id,set};
     });
     const d=await nsApi('/push',{changes});
     for(const res of d.results||[]){
-      const j=S.jobs.find(x=>x.id===res.ref);if(!j)continue;   // S may have been replaced by a Gist pull meanwhile
-      if(res.status===410){j.gone=true;delete j.nd;notes.push(`${j.company}: deleted in Notion, hidden here`);continue}
-      if(res.error){notes.push(`${j.company}: ${res.error}`);continue}
-      if(!j.nid)linked=true;
-      const s=sent[j.id]||{},left=(j.nd?.f||[]).filter(a=>!(a in s)||j[a]!==s[a]);   // edited again while sending
-      if(left.length)j.nd.f=left;else delete j.nd;
-      nsApplyRow(j,res.row,left);
-      const kept=(res.keptNotion||[]).map(n=>n==='stage'?'stage':n==='applied'?'applied date':n==='followUp'?'follow-up':n);
-      if(kept.length)notes.push(`${j.company}: Notion had a newer ${kept.join(', ')}. Kept Notion's.`);
+      const x=S[K.arr].find(y=>y.id===res.ref);if(!x)continue;   // S may have been replaced by a Gist pull meanwhile
+      if(res.status===410){delete x.nd;K.gone([x]);notes.push(`${K.name(x)}: deleted in Notion, removed here`);continue}
+      if(res.error){notes.push(`${K.name(x)}: ${res.error}`);continue}
+      if(!x.nid)linked=true;
+      const s=sent[x.id]||{},left=(x.nd?.f||[]).filter(a=>!(a in s)||x[a]!==s[a]);   // edited again while sending
+      if(left.length)x.nd.f=left;else delete x.nd;
+      nsApplyRow(K,x,res.row,left);
+      const kept=(res.keptNotion||[]).map(n=>K.label[n]||n);
+      if(kept.length)notes.push(`${K.name(x)}: Notion had a newer ${kept.join(', ')}. Kept Notion's.`);
     }
   }
   return linked;
 }
+const NS_ON=['jobs','roadmap'];   // kinds synced so far
 async function nsSync(mode){
   if(!nsCfg()||!S||nsJob.busy)return;
-  if(!mode&&!S.jobs.some(j=>j.nd)&&Date.now()-nsJob.at<6e4)return;   // at most one pull a minute unless there's something to send
-  nsJob={...nsJob,busy:true};if(view==='career')render();
-  let linked=false;const notes=[];
-  try{
-    const m=nsMeta(),full=mode==='full'||!m.jobsFull||!m.jobsSince||Date.now()-m.jobsFull>6*36e5;
-    const d=await nsApi('/pull?kinds=jobs'+(full?'':'&since='+encodeURIComponent(m.jobsSince)));
-    if(d.errors?.jobs)throw new Error(d.errors.jobs);
-    linked=nsMergeJobs(d.rows?.jobs||[],full);
-    Object.assign(m,{jobsSince:d.now},full?{jobsFull:Date.now()}:{});setNsMeta(m);
-    linked=(await nsPushJobs(notes))||linked;
-    nsJob={busy:false,at:Date.now(),msg:'',err:false};
-  }catch(e){nsJob={busy:false,at:Date.now(),msg:e.message,err:true}}
+  const waiting=()=>NS_ON.some(k=>S[NSYNC[k].arr].some(x=>x.nd&&!x.gone&&(x.nid||NSYNC[k].create)));   // only what can actually be sent
+  if(!mode&&!waiting()&&Date.now()-nsJob.at<6e4)return;   // at most one pull a minute unless there's something to send
+  nsJob={...nsJob,busy:true};if(['career','study'].includes(view))render();
+  let linked=false;const notes=[],errs=[];
+  for(const kind of NS_ON){
+    try{
+      const m=nsMeta(),full=mode==='full'||!m[kind+'Full']||!m[kind+'Since']||Date.now()-m[kind+'Full']>6*36e5;
+      const d=await nsApi(`/pull?kinds=${kind}`+(full?'':'&since='+encodeURIComponent(m[kind+'Since'])));
+      if(d.errors?.[kind])throw new Error(d.errors[kind]);
+      linked=nsMerge(kind,d.rows?.[kind]||[],full)||linked;
+      const m2=nsMeta();m2[kind+'Since']=d.now;if(full)m2[kind+'Full']=Date.now();setNsMeta(m2);
+      linked=(await nsPush(kind,notes))||linked;
+    }catch(e){errs.push(`${kind}: ${e.message}`)}
+  }
+  nsJob={busy:false,at:Date.now(),msg:errs.join(' · '),err:!!errs.length};
   if(linked)save();else save(true);   // a new link (nid) is real data other devices should get
   if(notes.length)toast(notes.slice(0,3).join(' · ')+(notes.length>3?` (+${notes.length-3} more)`:''));
-  if(['career','dash'].includes(view))render();
-  if(!nsJob.err&&S.jobs.some(j=>j.nd&&!j.gone))nsSoon();
+  if(['career','dash','study'].includes(view))render();
+  if(!nsJob.err&&waiting())nsSoon();
 }
+const nsLine=()=>!nsCfg()?'':nsJob.busy?'<span class="faint">↻ syncing with Notion…</span>':nsJob.err?`<span style="color:var(--amber)">○ Notion: ${esc(nsJob.msg)}</span>`:nsJob.at?`<span style="color:var(--acc)">●</span> Notion synced ${Date.now()-nsJob.at<6e4?'just now':ago(nsJob.at)}`:'<span class="faint">○ not synced yet</span>';
 
 /* ---------------- lock ---------------- */
 /* Owner-only lock. The code holds only a slow, salted PBKDF2 hash of the owner's passphrase —
@@ -945,11 +967,11 @@ function studyRoadmap(){
   <div class="card"><h3><span class="seg" style="flex-wrap:wrap">${tracks.map(t=>`<button class="${t===studyTrack?'on':''}" data-act="track" data-t="${esc(t)}">${esc(t)} <span class="faint">${pct(t)}%</span></button>`).join('')}</span></h3>
     <div class="meter" style="margin:-4px 0 14px"><i style="width:${pct(studyTrack)}%"></i></div>
     ${doneN?`<button class="btn sm ghost" style="width:100%;margin-bottom:8px;justify-content:center" data-act="rdDone">${showDone?`Hide ${doneN} done step${doneN===1?'':'s'}`:`<span style="color:var(--acc)">✓ ${doneN} done</span> · show them`}</button>`:''}
-    <div class="track">${items.map((r,i)=>`<div class="step ${r.status}"><span class="n">${r.step!=null?r.step:'·'}</span><span class="title">${esc(r.title)}${r.notes?`<div class="faint" style="font-size:12px">${esc(r.notes)}</div>`:''}</span>
+    <div class="track">${items.map((r,i)=>`<div class="step ${r.status}"><span class="n">${r.step!=null?r.step:'·'}</span><span class="title">${esc(r.title)}${nsCfg()&&r.nd?' <span class="faint" title="Waiting to sync with Notion" style="font-size:11px">⏳</span>':''}${r.notes?`<div class="faint" style="font-size:12px">${esc(r.notes)}</div>`:''}</span>
       ${r.phase?`<span class="pill">${esc(r.phase)}</span>`:''}${r.difficulty?`<span class="mono d-${esc(r.difficulty)}" style="font-size:11px">${esc(r.difficulty)}</span>`:''}
       ${r.url?`<a class="btn sm ghost" href="${esc(r.url)}" target="_blank" rel="noopener" title="Open in Notion">↗</a>`:''}
       <button class="pill ${r.status} clickable" style="background:none" data-act="cycle" data-id="${r.id}"><span class="dot"></span>${r.status}</button><button class="btn sm ghost" data-act="editStep" data-id="${r.id}">${I('edit')}</button></div>`).join('')||'<div class="empty">No items in this track.</div>'}</div>
-    <div class="faint mono" style="font-size:11px;margin-top:10px">click a status to cycle todo → doing → done</div></div>`;
+    <div class="faint mono" style="font-size:11px;margin-top:10px">click a status to cycle todo → doing → done${nsCfg()?` · ${nsLine()}`:''}</div></div>`;
 }
 
 /* ----- sessions ----- */
@@ -1081,7 +1103,7 @@ function studyWeek(){
 }
 after.study=()=>{
   const lq=$('#lcQ');if(lq)lq.oninput=()=>{lcQ=lq.value;render();const e=$('#lcQ');e.focus();e.setSelectionRange(e.value.length,e.value.length)};
-  if(['review','quizzes','roadmap'].includes(studyTab)){if(!ghIdx)loadGhNotes();else ghLoadAll()}
+  if(['review','quizzes','roadmap'].includes(studyTab)){if(!ghIdx){if(Date.now()-ghFail>6e4)loadGhNotes()}else ghLoadAll()}
   const np=$('#npd');if(np)np.onchange=()=>{S.settings.newPerDay=+np.value;save();render()};
   const sel=$('#planSel');if(sel)sel.onchange=()=>{planId=sel.value;render()};
   const p=curPlan();if(!p)return;
@@ -1372,7 +1394,7 @@ function jCard(j,ci,c){
 function career(){
   const L=jobsLive(),n=k=>L.filter(j=>j.status===k).length,fresh=L.filter(j=>j.fresh).length,c=nsCfg();
   const wait=c?L.filter(j=>j.nd||!j.nid).length:0;
-  const st=!c?'':nsJob.busy?'<span class="faint">↻ syncing with Notion…</span>':nsJob.err?`<span style="color:var(--amber)">○ Notion: ${esc(nsJob.msg)}</span>`:nsJob.at?`<span style="color:var(--acc)">●</span> Notion synced ${Date.now()-nsJob.at<6e4?'just now':ago(nsJob.at)}${wait?` · ⏳ ${wait} waiting`:''}`:'<span class="faint">○ not synced yet</span>';
+  const st=nsLine()+(c&&!nsJob.busy&&!nsJob.err&&wait?` · ⏳ ${wait} waiting`:'');
   return `<div class="head"><div><h2>Career</h2><div class="sub">Job hunt + co-op pipeline. ${L.length} tracked · ${n('interview')} interviewing${fresh?` · <span style="color:var(--acc)">${fresh} new match${fresh>1?'es':''}</span>`:''}.</div>${st?`<div class="mono" style="font-size:12px;margin-top:6px">${st}</div>`:''}</div>
     <div class="chips">${fresh?`<button class="btn" data-act="jobsSeen">✓ Mark ${fresh} seen</button>`:''}${c?`<button class="btn" data-act="jobsSync" ${nsJob.busy?'disabled':''}>${I('refresh')} Notion</button>`:''}<button class="btn pri" data-act="addJob">+ Application</button></div></div>
   <div class="kanban">${JS.map(([k,l],ci)=>{const col=L.filter(j=>j.status===k).sort((a,b)=>(b.fresh?1:0)-(a.fresh?1:0));
@@ -1440,7 +1462,7 @@ function ghMeta(repo,path){
   return {id:`gh:${repo}/${path}`,src:'github',repo,path,type,title,subject:SUBJ[repo.toLowerCase()]||pretty(repo),topic:parts.length?pretty(parts.at(-1)):'General',area:parts.slice(0,-1).map(pretty).join(' / '),tkey:parts.join('/'),
     url:`https://github.com/${ghOwner()}/${repo}/blob/HEAD/${path.split('/').map(encodeURIComponent).join('/')}`};
 }
-let ghIdx=(()=>{try{return JSON.parse(localStorage.getItem(GHN))}catch(e){return null}})(),ghBusy=false,ghErr='',ghAllP=null;
+let ghIdx=(()=>{try{return JSON.parse(localStorage.getItem(GHN))}catch(e){return null}})(),ghBusy=false,ghErr='',ghFail=0,ghAllP=null;   // ghFail: time of the last failed load (Study waits a minute before retrying)
 const ghBody={};
 async function loadGhNotes(force){
   const nrep=S.settings.noteRepos||[],crep=S.settings.codeRepos||[],low=a=>a.map(x=>x.toLowerCase());
@@ -1457,8 +1479,8 @@ async function loadGhNotes(force){
         if(isN){const m=ghMeta(r,t.path);if(m){m.sha=t.sha;items.push(m)}}
         if(isC){const c=codeMeta(r,t.path);if(c){c.sha=t.sha;code.push(c)}}});
     }
-    ghIdx={sig,at:Date.now(),items,code};ghAllP=null;codeAllP=null;localStorage.setItem(GHN,JSON.stringify(ghIdx));
-  }catch(e){ghErr=e.message}
+    ghIdx={sig,at:Date.now(),items,code};ghFail=0;ghAllP=null;codeAllP=null;localStorage.setItem(GHN,JSON.stringify(ghIdx));
+  }catch(e){ghErr=e.message;ghFail=Date.now()}
   ghBusy=false;if(view==='notes'||view==='study')render();
 }
 async function ghText(n){
@@ -1780,6 +1802,9 @@ const jobF=(j={})=>[{type:'html',html:jobInfo(j)},{k:'company',label:'Company'},
 const skillF=[{k:'name',label:'Skill'},{k:'cat',label:'Category',ph:'Languages, Web, Tools…'},{k:'level',label:'Level (1–5)',type:'select',opts:[[1,'1 · Beginner'],[2,'2 · Learning'],[3,'3 · Comfortable'],[4,'4 · Strong'],[5,'5 · Expert']]},{k:'notes',label:'Evidence / notes'}];
 const projF=[{k:'name',label:'Name'},{k:'status',label:'Status',type:'select',opts:['Planning','Active','Paused','Shipped']},{k:'desc',label:'Description',type:'textarea'},{k:'next',label:'Next action'},{k:'link',label:'Link'}];
 const stepF=[{k:'track',label:'Track (existing or new)'},{k:'step',label:'Step number (optional)',type:'number'},{k:'title',label:'Title'},{k:'status',label:'Status',type:'select',opts:['todo','doing','done']},{k:'notes',label:'Notes'},{k:'url',label:'Link (optional)'}];
+const stepLinkedF=r=>[{type:'html',html:`<div class="jinfo"><div style="font-weight:600">${r.step!=null?`Step ${r.step} · `:''}${esc(r.title)}</div><div class="faint mono" style="font-size:12px;margin-top:4px">${[r.track,r.phase].filter(Boolean).map(esc).join(' · ')}</div>
+  <div class="faint" style="font-size:12px;margin-top:8px">Title, step and track come from Notion: change them there. Status and notes sync both ways.</div>${safeUrl(r.url)?`<div class="chips" style="margin-top:8px"><a class="btn sm" href="${esc(safeUrl(r.url))}" target="_blank" rel="noopener">Open in Notion ↗</a></div>`:''}</div>`},
+  {k:'status',label:'Status',type:'select',opts:['todo','doing','done']},{k:'notes',label:'Notes',type:'textarea'}];
 const normStep=o=>({...o,step:o.step===''||o.step==null||isNaN(o.step)||o.step===0?null:+o.step});
 const find=(arr,id)=>S[arr].find(x=>x.id===id);
 /* Merge an import file (made from Notion) into the current data. Re-importing updates, never duplicates. */
@@ -1807,9 +1832,11 @@ const A={
   sideToggle:()=>{const c=$('#app').classList.toggle('collapsed');localStorage.setItem('opuos.side',c?'1':'')},
   timerBox:()=>{if($('#app').classList.contains('collapsed')&&innerWidth>980)A.sideToggle()},
   track:d=>{studyTrack=d.t;render()},
-  cycle:d=>{const r=find('roadmap',d.id);r.status={todo:'doing',doing:'done',done:'todo'}[r.status];save();render()},
+  cycle:d=>{const r=find('roadmap',d.id);r.status={todo:'doing',doing:'done',done:'todo'}[r.status];nsTouch('roadmap',r,['status']);save();render()},
   addStep:()=>form('Roadmap item',stepF,{track:studyTrack||'',status:'todo'},o=>{S.roadmap.push({id:uid(),...normStep(o)});studyTrack=o.track}),
-  editStep:d=>{const r=find('roadmap',d.id);form('Edit item',stepF,r,o=>Object.assign(r,normStep(o)),del('roadmap',d.id))},
+  editStep:d=>{const r=find('roadmap',d.id);if(!r)return;
+    if(r.nid)return form('Edit step',stepLinkedF(r),r,o=>{const ch=Object.keys(o).filter(k=>String(r[k]??'')!==String(o[k]??''));Object.assign(r,o);nsTouch('roadmap',r,ch)});
+    form('Edit item',stepF,r,o=>Object.assign(r,normStep(o)),del('roadmap',d.id))},
   logSession:(d,pre={})=>form('Log study session',sessF(),{date:today(),minutes:60,problems:0,track:studyTrack||'',...pre},o=>{S.sessions.push({id:uid(),...o});toast(`Logged ${hm(o.minutes)} 🔥`)}),
   editSession:d=>{const s=find('sessions',d.id);form('Edit session',sessF(),s,o=>Object.assign(s,o),del('sessions',d.id))},
   addSkill:()=>form('New skill',skillF,{level:1},o=>S.skills.push({id:uid(),...o,level:+o.level})),
@@ -1818,11 +1845,11 @@ const A={
   editProject:d=>{const p=find('projects',d.id);form('Edit project',projF,p,o=>Object.assign(p,o),del('projects',d.id))},
   addJob:()=>form('New application',jobF(),{status:'applied',date:today(),followUp:addDays(today(),7)},o=>{S.jobs.push({id:uid(),...o});nsSoon()}),
   editJob:d=>{const j=find('jobs',d.id);if(!j)return;if(j.fresh){delete j.fresh;save(true);render()}
-    form('Edit application',jobF(j),j,o=>{const ch=Object.keys(o).filter(k=>String(j[k]??'')!==String(o[k]??''));Object.assign(j,o);nsTouch(j,ch)},
-      j.nid?()=>{j.status='skipped';nsTouch(j,['status'])}:del('jobs',d.id),j.nid?'Hide this job? It becomes "Skipped" in Notion too. Nothing is deleted.':null)},
+    form('Edit application',jobF(j),j,o=>{const ch=Object.keys(o).filter(k=>String(j[k]??'')!==String(o[k]??''));Object.assign(j,o);nsTouch('jobs',j,ch)},
+      j.nid?()=>{j.status='skipped';nsTouch('jobs',j,['status'])}:del('jobs',d.id),j.nid?'Hide this job? It becomes "Skipped" in Notion too. Nothing is deleted.':null)},
   mv:(d,e)=>{e.stopPropagation();const j=find('jobs',d.id),i=JS.findIndex(x=>x[0]===j.status),ch=['status'];j.status=JS[Math.max(0,Math.min(JS.length-1,i+ +d.d))][0];
     if(j.status==='applied'&&!j.date){j.date=today();ch.push('date');if(!j.followUp){j.followUp=addDays(today(),7);ch.push('followUp')}}
-    nsTouch(j,ch);save();render()},
+    nsTouch('jobs',j,ch);save();render()},
   jobsSeen:()=>{S.jobs.forEach(j=>delete j.fresh);save(true);render()},
   jobsSync:()=>nsSync('full'),
   addLink:()=>form('New link',[{k:'label',label:'Label'},{k:'url',label:'URL',ph:'https://'}],{},o=>S.links.push({id:uid(),...o})),
@@ -1859,7 +1886,7 @@ const A={
   rvAdd:()=>form('Add review item',[{k:'label',label:'What to review',ph:'e.g. Contrapositive vs converse'},{k:'detail',label:'Prompt / hint',type:'textarea'},{k:'link',label:'Link (optional)'}],{},o=>S.reviewItems.push({id:uid(),...o})),
   quizScore:d=>{const m=S.quizManual[d.id]||{outOf:10};form('Quiz score',[{k:'score',label:'First attempt score',ph:'e.g. 8.5'},{k:'outOf',label:'Out of',ph:'10'},{k:'corrected',label:'Corrected questions',ph:'e.g. Q2, Q4(b)'}],m,o=>{if(o.score===''){delete S.quizManual[d.id];return}S.quizManual[d.id]={score:+o.score,outOf:+o.outOf||10,corrected:o.corrected}})},
   openGhNote:d=>{const n=ghIdx?.items.find(x=>x.id===d.id);if(!n)return;noteId=n.id;nView='notes';nSubj=n.subject;nTopic=n.topic;nType='all';nSrc='all';nQ='';go('notes')},
-  sugDo:d=>{const r=find('roadmap',d.id);r.status='doing';save();render();toast(`Marked doing: ${r.title}`)},
+  sugDo:d=>{const r=find('roadmap',d.id);r.status='doing';nsTouch('roadmap',r,['status']);save();render();toast(`Marked doing: ${r.title}`)},
   sugNo:d=>{S.sugDismiss[d.id+'|'+d.k]=1;save();render()},
   lcRev:d=>{const p=find('leetcode',d.id);if(p.last>=S.lcRound){p.count=Math.max(0,(p.count||1)-1);p.last=p.prev||'';delete p.prev}else{p.prev=p.last||'';p.last=today();p.count=(p.count||0)+1}save();render()},
   lcStat:d=>{const p=find('leetcode',d.id);p.status=LCS[(LCS.indexOf(p.status)+1)%LCS.length];save();render()},
