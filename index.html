@@ -1921,7 +1921,11 @@ function mergeImport(d){
     d.roadmap.forEach(r=>{const e=S.roadmap.find(x=>x.nid===r.nid);if(e)Object.assign(e,r);else S.roadmap.push({id:uid(),...r});c.road++});
   }
   (d.roadmapPatch||[]).forEach(p=>{const e=S.roadmap.find(x=>x.track===p.track&&x.title===p.title);if(e)Object.assign(e,p.set)});
-  (d.notes||[]).forEach(n=>{const e=S.notes.find(x=>x.nid&&x.nid===n.nid);if(e)Object.assign(e,n);else S.notes.push({id:uid(),tags:[],subject:'',topic:'',updated:Date.now(),...n});c.notes++});
+  // notes match by Notion page id (dashes or not, or inside the note's Notion link); an entry
+  // with no title only updates a matching note (e.g. {nid, updated}) and is never added on its own
+  const pid=v=>(String(v||'').replace(/-/g,'').match(/([0-9a-f]{32})(?:[?#].*)?$/i)||[])[1]?.toLowerCase();
+  (d.notes||[]).forEach(n=>{const k=pid(n.nid),e=k&&S.notes.find(x=>!isJ(x)&&(pid(x.nid)===k||pid(x.url)===k));
+    if(e)Object.assign(e,n,{nid:e.nid||n.nid});else if(n.title!=null)S.notes.push({id:uid(),tags:[],subject:'',topic:'',updated:Date.now(),...n});else return;c.notes++});
   (d.plans||[]).forEach(r=>{const p=parsePlan(r.md,r.week);Object.assign(p,{nid:r.nid,url:r.url});if(r.title)p.title=r.title;
     const i=S.plans.findIndex(x=>x.week===p.week);if(i>=0){const o=S.plans[i];p.id=o.id;p.days.forEach((x,k)=>{if(o.days[k]?.day===x.day)x.done=o.days[k].done});p.outcomes.forEach((x,k)=>{if(o.outcomes[k])x.done=o.outcomes[k].done});S.plans[i]=p}else S.plans.push(p);c.plans++});
   (d.leetcode||[]).forEach(p=>{const e=S.leetcode.find(x=>x.num===p.num);if(e)Object.assign(e,p,{last:e.last,prev:e.prev,count:Math.max(e.count||0,p.count||0)});else S.leetcode.push({id:uid(),last:'',...p});c.lc++});
