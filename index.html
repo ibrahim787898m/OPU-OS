@@ -1535,10 +1535,10 @@ function ghMeta(repo,path){
 }
 let ghIdx=(()=>{try{return JSON.parse(localStorage.getItem(GHN))}catch(e){return null}})(),ghBusy=false,ghErr='',ghFail=0,ghAllP=null;   // ghFail: time of the last failed load (Study waits a minute before retrying)
 const ghBody={};
-async function loadGhNotes(force){
+async function loadGhNotes(force,maxAge=30*6e4){
   const nrep=S.settings.noteRepos||[],crep=S.settings.codeRepos||[],low=a=>a.map(x=>x.toLowerCase());
   const repos=[...new Map([...nrep,...crep].map(r=>[r.toLowerCase(),r])).values()],sig=ghOwner()+'|'+nrep.join(',')+'|'+crep.join(',');
-  if(ghBusy||(!force&&ghIdx?.sig===sig&&Date.now()-ghIdx.at<30*6e4))return;
+  if(ghBusy||(!force&&ghIdx?.sig===sig&&Date.now()-ghIdx.at<maxAge))return;
   ghBusy=true;ghErr='';if(view==='notes')render();
   try{
     const items=[],code=[];
@@ -1553,6 +1553,40 @@ async function loadGhNotes(force){
     ghIdx={sig,at:Date.now(),items,code};ghFail=0;ghAllP=null;codeAllP=null;localStorage.setItem(GHN,JSON.stringify(ghIdx));
   }catch(e){ghErr=e.message;ghFail=Date.now()}
   ghBusy=false;if(view==='notes'||view==='study')render();
+  if(!ghErr)ghDates();
+}
+/* Last-commit time of each GitHub note → n.updated, so Notes → Recent can sort them.
+   Cached per file by blob sha in localStorage (not synced): only new or changed files are
+   looked up. With the sync token: GitHub GraphQL, one request per 50 files. Without it:
+   the public REST API, at most 30 files per run (60 requests/hour limit); later runs catch up. */
+const GHD='opuos.ghdates';
+let ghdBusy=false,ghdAgain=false;
+async function ghDates(){
+  if(!ghIdx)return;if(ghdBusy){ghdAgain=true;return}
+  ghdBusy=true;ghdAgain=false;
+  let m={};try{m=JSON.parse(localStorage.getItem(GHD))||{}}catch(e){}
+  const todo=()=>ghIdx.items.filter(n=>m[n.id]?.s!==n.sha),tok=syncCfg()?.token,q=JSON.stringify;
+  const put=(n,c)=>{m[n.id]={s:n.sha,t:c?Date.parse(c):0}};   // t:0 = no commit found (don't ask again until it changes)
+  let ok=!!tok;
+  if(ok)try{
+    const need=todo();
+    for(let i=0;i<need.length;i+=50){
+      const by={};need.slice(i,i+50).forEach((n,j)=>(by[n.repo]??=[]).push([j,n]));
+      const query='query{'+Object.entries(by).map(([r,l],k)=>`r${k}:repository(owner:${q(ghOwner())},name:${q(r)}){defaultBranchRef{target{...on Commit{${l.map(([j,n])=>`f${j}:history(first:1,path:${q(n.path)}){nodes{committedDate}}`).join(' ')}}}}}`).join(' ')+'}';
+      const res=await fetch('https://api.github.com/graphql',{method:'POST',cache:'no-store',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:q({query})});
+      const d=res.ok?(await res.json()).data:null;if(!d)throw new Error('graphql');
+      Object.entries(by).forEach(([r,l],k)=>{const t=d['r'+k]?.defaultBranchRef?.target;if(t)l.forEach(([j,n])=>put(n,t['f'+j]?.nodes?.[0]?.committedDate))});
+    }
+  }catch(e){ok=false}
+  if(!ok)for(const n of todo().slice(0,30)){   // no token, or GraphQL refused it
+    try{const res=await fetch(`https://api.github.com/repos/${ghOwner()}/${n.repo}/commits?path=${encodeURIComponent(n.path)}&per_page=1`,{cache:'no-store'});
+      if(!res.ok)break;put(n,(await res.json())[0]?.commit?.committer?.date)}catch(e){break}
+  }
+  const ids=new Set(ghIdx.items.map(n=>n.id));Object.keys(m).forEach(k=>{if(!ids.has(k))delete m[k]});
+  ghIdx.items.forEach(n=>{const d=m[n.id];if(d?.s===n.sha&&d.t)n.updated=d.t});
+  try{localStorage.setItem(GHD,JSON.stringify(m));localStorage.setItem(GHN,JSON.stringify(ghIdx))}catch(e){}
+  ghdBusy=false;if(view==='notes')render();
+  if(ghdAgain)ghDates();
 }
 async function ghText(n){
   if(ghBody[n.sha]!=null)return ghBody[n.sha];
@@ -1706,7 +1740,7 @@ function notesLib(){
       </div>
       <div class="tchips"><button class="tchip ${nType==='all'?'on':''}" data-act="nType" data-v="all">all<i>${inScope.length}</i></button>${NOTE_TYPES.filter(([k])=>tc[k]).map(([k,l])=>`<button class="tchip ${nType===k?'on':''}" data-act="nType" data-v="${k}">${l.toLowerCase()}<i>${tc[k]}</i></button>`).join('')}</div>
       <div class="faint mono" style="font-size:11px">${list.length} note${list.length===1?'':'s'}${nSubj?' · '+esc(nSubj)+(nTopic?' › '+esc(nTopic):''):''}${q&&ghIdx&&!ghAllP?' · searching titles…':''}</div>
-      <div class="nlist">${list.slice(0,nShow).map(x=>`<div class="nitem ${x.id===noteId?'on':''}" data-act="openNote" data-id="${esc(x.id)}"><div class="t">${x.pinned?'📌 ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ty-${x.type}">${x.type}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc([x.subject,x.topic].filter(Boolean).join(' · ')||(x.updated?ago(new Date(x.updated).toISOString()):''))}</span>${x.src==='github'?'<span title="From GitHub" style="margin-left:auto">'+I('git')+'</span>':x.url?'<span title="Imported from Notion" style="margin-left:auto">N</span>':''}</div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub notes…':'Nothing matches.'}</div>`}${list.length>nShow?moreBtn(list.length):''}</div>
+      <div class="nlist">${list.slice(0,nShow).map(x=>`<div class="nitem ${x.id===noteId?'on':''}" data-act="openNote" data-id="${esc(x.id)}"><div class="t">${x.pinned?'📌 ':''}${esc(x.title||'Untitled')}</div><div class="meta"><span class="ty ty-${x.type}">${x.type}</span><span style="overflow:hidden;text-overflow:ellipsis">${esc(nSort==='recent'&&x.updated?[ago(new Date(x.updated).toISOString()),x.subject,x.topic].filter(Boolean).join(' · '):[x.subject,x.topic].filter(Boolean).join(' · ')||(x.updated?ago(new Date(x.updated).toISOString()):''))}</span>${x.src==='github'?'<span title="From GitHub" style="margin-left:auto">'+I('git')+'</span>':x.url?'<span title="Imported from Notion" style="margin-left:auto">N</span>':''}</div></div>`).join('')||`<div class="empty">${ghBusy?'Loading your GitHub notes…':'Nothing matches.'}</div>`}${list.length>nShow?moreBtn(list.length):''}</div>
     </div>
     ${n?(n.src==='github'?ghViewer(n):noteEditor(S.notes.find(x=>x.id===n.id))):'<div class="empty">Pick a note, or create one.</div>'}
   </div>`;
@@ -1990,7 +2024,7 @@ const A={
   nSrc:d=>{nShow=30;nSrc=d.v;render()},
   nPick:d=>{nShow=30;nSubj=d.s;nTopic=d.t;nType='all';nOpen=false;render()},
   nType:d=>{nShow=30;nType=d.v;render()},
-  nSort:d=>{nSort=d.v;render()},
+  nSort:d=>{nSort=d.v;render();if(d.v==='recent'){loadGhNotes(false,2*6e4);ghDates()}},   // Recent: re-read GitHub if the list is over 2 min old
   nm:d=>{noteMode=d.m;render()},
   openNote:d=>{noteId=d.id;nOpen=true;render();if(innerWidth<=980)scrollTo(0,0)},
   nBack:()=>{nOpen=false;render()},
