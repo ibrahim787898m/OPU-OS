@@ -1718,7 +1718,8 @@ const nTabs=()=>`<span class="seg">${[['notes','Notes'],['code','Code'],['journa
 function notesLib(){
   const all=allNotes(),km=tkeyMap(all),q=nQ.trim().toLowerCase();
   const key=n=>n.tkey||km[n.subject+'|'+n.topic]||'~'+(n.topic||''); // own topics sort after repo topics
-  const base=all.filter(n=>(nSrc==='all'||(nSrc==='github')===(n.src==='github'))&&qMatch(n,q));
+  const srcOf=n=>n.src==='github'?'github':n.nid||n.url?'notion':'local';   // Notion = imported from Notion (has its page id/link)
+  const base=all.filter(n=>(nSrc==='all'||srcOf(n)===nSrc)&&qMatch(n,q));
   const subjects={};base.forEach(n=>{const s=n.subject||'Unsorted';(subjects[s]??={n:0,t:{}}).n++;const t=n.topic||'General';subjects[s].t[t]??={n:0,k:key(n)};subjects[s].t[t].n++});
   const inScope=base.filter(n=>(!nSubj||(n.subject||'Unsorted')===nSubj)&&(!nTopic||(n.topic||'General')===nTopic));
   const tc={};inScope.forEach(n=>tc[n.type]=(tc[n.type]||0)+1);
@@ -1732,7 +1733,7 @@ function notesLib(){
   <div class="notes lib ${nOpen?'open':''} ${nFocus?'focus':''}">
     <div class="npanel">
       <input class="search" id="nQ" placeholder="Search notes…" value="${esc(nQ)}">
-      <div class="nrow"><span class="seg">${[['all','All'],['github','GitHub'],['local','Mine']].map(([k,l])=>`<button class="${nSrc===k?'on':''}" data-act="nSrc" data-v="${k}">${l}</button>`).join('')}</span>
+      <div class="nrow"><span class="seg">${[['all','All'],['github','GitHub'],['notion','Notion'],['local','Mine']].map(([k,l])=>`<button class="${nSrc===k?'on':''}" data-act="nSrc" data-v="${k}">${l}</button>`).join('')}</span>
         <span class="seg">${[['topic','By topic'],['recent','Recent']].map(([k,l])=>`<button class="${nSort===k?'on':''}" data-act="nSort" data-v="${k}">${l}</button>`).join('')}</span></div>
       <div class="nsel">
         <select id="nSubjSel" title="Subject"><option value="">All subjects (${base.length})</option>${subjList.map(s=>`<option value="${esc(s)}" ${nSubj===s?'selected':''}>${esc(s)} (${subjects[s].n})</option>`).join('')}</select>
