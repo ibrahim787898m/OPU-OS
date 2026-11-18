@@ -971,7 +971,7 @@ const after={};
 
 /* ---------------- DASHBOARD ---------------- */
 function dash(){
-  const h=new Date().getHours(),greet=h<12?'Good morning':h<18?'Good afternoon':'Good evening';
+  const h=new Date().getHours(),greet=h<5?'Up late':h<7?'Early morning':h<12?'Good morning':h<17?'Good afternoon':h<21?'Good evening':'Late evening';   // 0–4 · 5–6 · 7–11 · 12–16 · 17–20 · 21–23
   const wm=weekMinutes(),goal=S.settings.weeklyGoal*60,active=jobsLive().filter(j=>['applied','interview'].includes(j.status)).length,freshN=jobsLive().filter(j=>j.fresh&&j.status!=='skipped').length;
   const doing=S.roadmap.filter(r=>r.status==='doing');
   const due=jobsLive().filter(j=>j.followUp&&j.followUp<=addDays(today(),3)&&!CLOSED.includes(j.status)).sort((a,b)=>a.followUp.localeCompare(b.followUp));
