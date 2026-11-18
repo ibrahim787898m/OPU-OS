@@ -21,6 +21,10 @@ This repo is an **AI-built showcase app**, not a learning repo. Here, Claude wri
 ## Code map (sections in index.html, in order)
 seed → `migrate()` → Gist sync → lock (`OWNER`, PBKDF2) → router → Dashboard → Study (week plan parser, review queue, quizzes, roadmap suggestions, LeetCode) → GitHub notes (`ghMeta`, `loadGhNotes`; one tree fetch per repo feeds notes and code) → Code (`codeMeta`, `hl` highlighter, `lcCode`) → Notes & Journal (tabs Notes | Code | Journal) → Markdown renderer (`md`, `inl`: escape first) → Settings (incl. Notion sync card `nsCard`, client `nsApi`/`nsPing`, defined just before the lock section) → forms → actions object `A` (`data-act` clicks) → timer → command palette.
 
+## Subagents (`.claude/agents/`)
+- `opuos-tester`: runs the headless-Chrome tests below in a temp folder and reports pass/fail, errors and screenshots. Use it after each change instead of building the harness inline.
+- `opuos-rules-check`: read-only check of the uncommitted diff against the hard rules above. Run it before suggesting a commit message.
+
 ## Testing (no Node here)
 Test in headless Chrome (`google-chrome --headless=new`):
 - Build a copy of `index.html` with a test harness that calls `enter()`, runs `mergeImport()` on sample data, opens every view and collects `window.onerror`. Read results with `--dump-dom --virtual-time-budget=…`.
