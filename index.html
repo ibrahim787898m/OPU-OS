@@ -483,7 +483,7 @@ function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){} if(!S)S=s
 function migrate(){
   S.settings.noteRepos??=['math','dsa','cs50x'];
   S.settings.codeRepos??=['CS50P','leetcode-solutions','dsa','math']; // cs50x left out on purpose (academic honesty)
-  S.plans??=[];S.ntasks??=[];S.nsIgnore??={};S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
+  S.plans??=[];S.ntasks??=[];(S.sessions||[]).forEach(x=>x.time??='');S.nsIgnore??={};S.leetcode??=[];S.lcRound??=today();S.review??={};S.reviewItems??=[];S.quizManual??={};S.sugDismiss??={};S.reviewLog??=[];
   (S.jobs||[]).forEach(j=>{if(j.status==='rejected'&&j.stage==='No Answer')j.status='noanswer'});   // 7 stages now (was one "Closed" row)
   S.notes.forEach(n=>{n.tags??=[];n.subject??='';n.topic??='';if(n.type==='journal')n.date??=dstr(new Date(n.updated||Date.now()))});
 }
@@ -1077,6 +1077,9 @@ let sTrack='all',sWeeks=8;
 const sOpen=(()=>{try{return JSON.parse(localStorage.getItem('opuos.sopen'))||{}}catch(e){return {}}})();
 const sSaveOpen=()=>localStorage.setItem('opuos.sopen',JSON.stringify(sOpen));
 let sVisible=[];
+// newest first: date, then start time (HH:MM), then when it was logged; sessions with no time sort last within their day
+const hhmm=d=>String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+const sessCmp=(a,b)=>b.date.localeCompare(a.date)||(b.time||'').localeCompare(a.time||'')||(b.at||0)-(a.at||0)||b.id.localeCompare(a.id);
 function studySessions(){
   const all=S.sessions.filter(x=>x.date),tracks=[...new Set(all.map(x=>x.track).filter(Boolean))].sort();
   if(sTrack!=='all'&&!tracks.includes(sTrack))sTrack='all';
@@ -1086,7 +1089,7 @@ function studySessions(){
   sVisible=shown;
   const totalMin=list.reduce((a,x)=>a+(+x.minutes||0),0),avgWeek=weeks.length?Math.round(totalMin/weeks.length):0;
   const isOpen=w=>sOpen[w]??(w===cur);
-  const row=x=>`<tr><td class="mono muted">${fmtDate(x.date)}</td><td>${esc(x.topic)}<div class="faint" style="font-size:12px">${esc(x.track||'')}</div></td><td class="mono">${hm(+x.minutes)}</td><td class="mono muted">${+x.problems||''}</td><td style="text-align:right"><button class="btn sm ghost" data-act="editSession" data-id="${x.id}">${I('edit')}</button></td></tr>`;
+  const row=x=>`<tr><td class="mono muted">${fmtDate(x.date)}${x.time?`<div class="faint" style="font-size:12px">${esc(x.time)}</div>`:''}</td><td>${esc(x.topic)}<div class="faint" style="font-size:12px">${esc(x.track||'')}</div></td><td class="mono">${hm(+x.minutes)}</td><td class="mono muted">${+x.problems||''}</td><td style="text-align:right"><button class="btn sm ghost" data-act="editSession" data-id="${x.id}">${I('edit')}</button></td></tr>`;
   return `<div class="g g4" style="margin-bottom:16px">
       <div class="card stat"><div class="label">This week</div><div class="v">${(weekMinutes()/60).toFixed(1)}<small>h</small></div></div>
       <div class="card stat"><div class="label">Streak</div><div class="v">${streak()}<small>d</small></div></div>
@@ -1094,7 +1097,7 @@ function studySessions(){
       <div class="card stat"><div class="label">Logged problems</div><div class="v">${list.reduce((a,x)=>a+(+x.problems||0),0)}</div></div></div>
     ${all.length?`<div class="qctl"><div class="tchips" style="margin:0">${['all',...tracks].map(t=>`<button class="tchip ${sTrack===t?'on':''}" data-act="sTrack" data-v="${esc(t)}">${esc(t==='all'?'all':t.toLowerCase())}<i>${t==='all'?all.length:all.filter(x=>x.track===t).length}</i></button>`).join('')}</div>
       <span class="chips"><button class="btn sm ghost" data-act="sAll" data-v="1">Expand all</button><button class="btn sm ghost" data-act="sAll" data-v="0">Collapse all</button></span></div>`:''}
-    ${shown.map(w=>{const xs=byWeek[w].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)),open=isOpen(w),mins=xs.reduce((a,x)=>a+(+x.minutes||0),0),probs=xs.reduce((a,x)=>a+(+x.problems||0),0);
+    ${shown.map(w=>{const xs=byWeek[w].sort(sessCmp),open=isOpen(w),mins=xs.reduce((a,x)=>a+(+x.minutes||0),0),probs=xs.reduce((a,x)=>a+(+x.problems||0),0);
       const per=[...Array(7)].map((_,i)=>{const d=addDays(w,i);return xs.filter(x=>x.date===d).reduce((a,x)=>a+(+x.minutes||0),0)}),mx=Math.max(60,...per);
       return `<div class="card qgroup ${open?'open':''}"><button class="qhead" data-act="sToggle" data-k="${w}" data-open="${open?1:0}" aria-expanded="${open}">
         <span class="qcar">${I('chev')}</span>
@@ -1900,7 +1903,7 @@ function form(title,fields,vals,onSave,onDel,delMsg){
 }
 function closeModal(){$('#modalWrap').classList.remove('on')}
 const tracksList=()=>[...new Set(S.roadmap.map(r=>r.track))];
-const sessF=()=>[{k:'date',label:'Date',type:'date'},{k:'topic',label:'What did you study?',ph:'e.g. CS50X pset 2 — caesar'},{k:'track',label:'Track',type:'select',opts:[...tracksList(),'Project','Other']},{k:'minutes',label:'Minutes',type:'number'},{k:'problems',label:'Problems solved (LeetCode etc.)',type:'number'}];
+const sessF=()=>[{k:'date',label:'Date',type:'date'},{k:'time',label:'Start time',type:'time'},{k:'topic',label:'What did you study?',ph:'e.g. CS50X pset 2 — caesar'},{k:'track',label:'Track',type:'select',opts:[...tracksList(),'Project','Other']},{k:'minutes',label:'Minutes',type:'number'},{k:'problems',label:'Problems solved (LeetCode etc.)',type:'number'}];
 const jobInfo=j=>{const meta=[j.found&&'found '+fmtDate(j.found),j.source,j.resume&&j.resume+' resume'].filter(Boolean),pl=safeUrl(j.link),nl=safeUrl(j.nurl);
   return j.why||meta.length||pl||nl?`<div class="jinfo">${j.why?`<div class="label" style="margin-bottom:4px">Why it fits</div><div style="margin-bottom:8px">${esc(j.why)}</div>`:''}${meta.length?`<div class="faint mono" style="font-size:12px">${meta.map(esc).join(' · ')}</div>`:''}
     ${pl||nl?`<div class="chips" style="margin-top:8px">${pl?`<a class="btn sm" href="${esc(pl)}" target="_blank" rel="noopener">Open posting ↗</a>`:''}${nl?`<a class="btn sm" href="${esc(nl)}" target="_blank" rel="noopener">Open in Notion ↗</a>`:''}</div>`:''}</div>`:''};
@@ -1947,7 +1950,7 @@ const A={
   editStep:d=>{const r=find('roadmap',d.id);if(!r)return;
     if(r.nid)return form('Edit step',stepLinkedF(r),r,o=>{const ch=Object.keys(o).filter(k=>String(r[k]??'')!==String(o[k]??''));Object.assign(r,o);nsTouch('roadmap',r,ch)});
     form('Edit item',stepF,r,o=>Object.assign(r,normStep(o)),del('roadmap',d.id))},
-  logSession:(d,pre={})=>form('Log study session',sessF(),{date:today(),minutes:60,problems:0,track:studyTrack||'',...pre},o=>{S.sessions.push({id:uid(),...o});toast(`Logged ${hm(o.minutes)} 🔥`)}),
+  logSession:(d,pre={})=>form('Log study session',sessF(),{date:today(),time:hhmm(new Date()),minutes:60,problems:0,track:studyTrack||'',...pre},o=>{S.sessions.push({id:uid(),at:Date.now(),...o});toast(`Logged ${hm(o.minutes)} 🔥`)}),
   editSession:d=>{const s=find('sessions',d.id);form('Edit session',sessF(),s,o=>Object.assign(s,o),del('sessions',d.id))},
   addSkill:()=>form('New skill',skillF,{level:1},o=>S.skills.push({id:uid(),...o,level:+o.level})),
   editSkill:d=>{const s=find('skills',d.id);form('Edit skill',skillF,s,o=>Object.assign(s,o,{level:+o.level}),del('skills',d.id))},
@@ -2091,7 +2094,7 @@ function stopTimer(){clearInterval(T.iv);T.run=false;renderTimer()}
 function finishTimer(early){
   const mins=Math.max(1,Math.round((Date.now()-T.start)/6e4));stopTimer();
   if(!early)try{const c=new AudioContext(),o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);o.frequency.value=880;g.gain.setValueAtTime(.15,c.currentTime);g.gain.exponentialRampToValueAtTime(.001,c.currentTime+1.2);o.start();o.stop(c.currentTime+1.2)}catch(e){}
-  A.logSession({}, {minutes:early?mins:T.mins});
+  A.logSession({}, {minutes:early?mins:T.mins,date:dstr(new Date(T.start)),time:hhmm(new Date(T.start))});
 }
 
 /* ---------------- command palette ---------------- */

@@ -25,7 +25,7 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 | **Quizzes** | First-attempt scores read automatically from each quiz file (`First attempt: 9/10`), shown as **collapsible topic rows** with average, a mini trend of each quiz's score, and badges (unfinished, to review). Filter by subject, sort by course order or weakest first, and expand or collapse all. Topics with an unfinished quiz open by themselves. Quizzes without a score line can be scored by hand. |
 | **Roadmap** | Numbered roadmap steps by track (DSA, Foundations, Math, Courses…) with phase, difficulty and links. A "Next up" banner, plus **suggestions from my repos**: steps that have notes on GitHub but are still marked *todo*. |
 | **LeetCode** | Every solved problem with difficulty, pattern, key insight and a link to my solution, grouped into **collapsible rows by pattern** (with revised x/y, mistakes, revisit). A search box finds any problem instantly. A ✓ marks it revised in the current revision round, and filters show not revised, revisit and mistakes. |
-| **Sessions** | Logged study sessions (from the focus timer or added by hand), grouped into **collapsible weeks** with total time, problems and a Mon–Sun mini chart. This week opens by itself, older weeks load 8 at a time, and track chips filter by subject. |
+| **Sessions** | Logged study sessions (from the focus timer or added by hand), grouped into **collapsible weeks** with total time, problems and a Mon–Sun mini chart. Inside a week, sessions are sorted newest first by date and start time. This week opens by itself, older weeks load 8 at a time, and track chips filter by subject. |
 
 **Weekly plans arrive automatically:** a small GitHub Action in a separate private repo copies the latest Notion "Week of …" pages into a secret Gist every 30 minutes. OPU/OS picks them up when it opens. New weeks are added, and mid-week edits update the plan while keeping ticks and review answers. Plans only come from Notion (there's no paste box any more). Each day has an **edit** button: changing its focus or plan updates that day's row in the Notion "Week of …" page, a new plan also becomes the day's task Notes, and changing the task title updates the day's task in Notion Tasks.
 
@@ -42,7 +42,7 @@ It's one `index.html` file with no build step, no framework and no server, hoste
 
 ### Everything else
 - **Ctrl+K command palette**: jump anywhere, run actions, and search *inside* every note
-- **Focus timer** (25 / 50 / 90 min) that logs a study session when it ends
+- **Focus timer** (25 / 50 / 90 min) that logs a study session when it ends, with the time it started
 - **Skills, Projects, Career** (job pipeline board with follow-up reminders), **GitHub** stats and **Presence** links
 - **Long lists stay short**: Review shows 10 at a time, Notes/Code/Journal lists load 30 at a time, the Roadmap folds finished steps, and each Career column shows its 6 latest cards (with "show more" everywhere).
 - **Keyboard shortcuts**: 1–9 switch sections, `[` collapses or expands the sidebar
