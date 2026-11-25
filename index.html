@@ -519,10 +519,11 @@ async function wkData(path,opts={},cfg=nsCfg()){
   let r;
   try{r=await fetch(cfg.url+path,{...opts,cache:'no-store',headers:{Authorization:'Bearer '+cfg.key,...(opts.body?{'Content-Type':'application/json'}:{})}})}
   catch(e){throw new Error('Can\'t reach the Worker (offline?)')}
-  if(r.status===404&&path==='/data')return null;
   const t=await r.text();
   if(!r.ok){let m='';try{m=JSON.parse(t).error}catch(e){}
-    const err=new Error(r.status===401?'Wrong sync key':r.status===404&&!m?'The Worker needs the device-sync update (redeploy it)':m||'Worker error '+r.status);err.conflict=r.status===409;throw err}
+    const old=r.status===404&&(!m||m==='Not found');   // an older Worker without /data answers a plain "Not found"
+    if(r.status===404&&path==='/data'&&!old)return null;   // the new Worker: nothing saved yet
+    const err=new Error(r.status===401?'Wrong sync key':old?'The Worker is running older code: paste the new opuos-sync.js into Cloudflare and press Deploy':m||'Worker error '+r.status);err.conflict=r.status===409;throw err}
   return t;
 }
 async function readCloud(){
