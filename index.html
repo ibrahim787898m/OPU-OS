@@ -375,7 +375,14 @@ tr:hover td{background:rgba(255,255,255,.015)}
       <div class="err" id="lockErr"></div>
       <button class="btn pri" style="width:100%;padding:12px;margin-top:6px" id="lockBtn">Unlock →</button>
     </form>
-    <button class="linkbtn" id="restoreToggle" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg> Restore from GitHub Gist</button>
+    <button class="linkbtn" id="restoreToggle" type="button"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></svg> Restore my data</button>
+    <form id="restoreWForm" style="display:none;margin-top:14px">
+      <input id="restoreWUrl" placeholder="Worker address (https://…workers.dev)" autocomplete="off">
+      <input id="restoreWKey" type="password" placeholder="sync key" autocomplete="off" style="margin-top:6px">
+      <div class="err" id="restoreWErr"></div>
+      <button class="btn" style="width:100%;padding:12px;margin-top:6px" id="restoreWBtn">Restore from my Worker →</button>
+      <button class="linkbtn" id="restoreGToggle" type="button" style="margin-top:8px">Older: restore from a GitHub Gist</button>
+    </form>
     <form id="restoreForm" style="display:none;margin-top:14px">
       <input id="restoreToken" type="password" placeholder="GitHub token (gist scope)" autocomplete="off">
       <div class="err" id="restoreErr"></div>
@@ -491,11 +498,37 @@ function save(quiet){if(!quiet)S._t=Date.now();
   try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('⚠ Browser storage is full — this change was NOT saved here. Export a backup now.');return}
   if(!quiet)schedulePush()}
 
-/* ---------------- cloud sync (private GitHub Gist) ----------------
-   Gist file opuos.json = {v, savedAt, hash, data}. Token + gist id live in
-   localStorage under opuos.sync (never inside exported data). Newest savedAt wins. */
-const SYNC='opuos.sync',GF='opuos.json';
+/* ---------------- cloud sync (Worker, or the older private GitHub Gist) ----------------
+   Payload = {v, savedAt, hash, data}. Since 25 Nov 2026 it's stored by the Notion Worker
+   (PUT/GET /data, a D1 database with version history) once "Move sync to the Worker" was
+   pressed: localStorage opuos.store = 'worker'. Before that (or on a device that hasn't
+   switched yet) it's the secret Gist file opuos.json. The move leaves movedTo:'worker' in
+   the Gist, so other devices switch by themselves on their next pull. Token + gist id live
+   in localStorage under opuos.sync, the Worker address + key under opuos.notion (never
+   inside exported data). The GitHub token is still used for GitHub notes and the backup
+   plans Gist. */
+const SYNC='opuos.sync',GF='opuos.json',STORE='opuos.store';
 const syncCfg=()=>{try{return JSON.parse(localStorage.getItem(SYNC))}catch(e){return null}};
+const wkStore=()=>localStorage.getItem(STORE)==='worker';                // this device syncs through the Worker
+const onWorker=()=>wkStore()&&!!nsCfg()?.url;
+const cloudOn=()=>wkStore()?onWorker():!!syncCfg()?.gistId;
+/* Worker /data calls. Returns the raw text (the payload is passed through untouched), null for
+   "nothing saved yet"; a 409 (another device saved first) throws an error with .conflict. */
+async function wkData(path,opts={},cfg=nsCfg()){
+  if(!cfg?.url)throw new Error('Notion sync (the Worker) is not connected on this device');
+  let r;
+  try{r=await fetch(cfg.url+path,{...opts,cache:'no-store',headers:{Authorization:'Bearer '+cfg.key,...(opts.body?{'Content-Type':'application/json'}:{})}})}
+  catch(e){throw new Error('Can\'t reach the Worker (offline?)')}
+  if(r.status===404&&path==='/data')return null;
+  const t=await r.text();
+  if(!r.ok){let m='';try{m=JSON.parse(t).error}catch(e){}
+    const err=new Error(r.status===401?'Wrong sync key':r.status===404&&!m?'The Worker needs the device-sync update (redeploy it)':m||'Worker error '+r.status);err.conflict=r.status===409;throw err}
+  return t;
+}
+async function readCloud(){
+  if(wkStore()){const t=await wkData('/data');if(t==null)throw new Error('No data saved in the Worker yet');return JSON.parse(t)}
+  return readGist(syncCfg().gistId);
+}
 let syncSt={s:'off',at:0,msg:''},pushT=null,unlocked=false;
 async function ghApi(path,opts={},token){
   const t=token||syncCfg()?.token;
@@ -522,18 +555,32 @@ function stash(reason){try{if(S)localStorage.setItem(REPL,JSON.stringify({at:Dat
 let syncReady=false;
 const payload=()=>JSON.stringify({v:1,savedAt:S._t||Date.now(),hash:localStorage.getItem(HKEY),data:S});
 function applyRemote(r){S=r.data;migrate();localStorage.setItem(KEY,JSON.stringify(S));setBase(r.savedAt)}
-function schedulePush(){if(!syncCfg()?.gistId||!unlocked)return;clearTimeout(pushT);setSync('pending');pushT=setTimeout(pushGist,2500)}
-async function pushGist(){
-  const c=syncCfg();if(!c?.gistId)return;clearTimeout(pushT);pushT=null;
+function schedulePush(){if(!cloudOn()||!unlocked)return;clearTimeout(pushT);setSync('pending');pushT=setTimeout(pushGist,2500)}
+let pushRetry=0;
+async function pushGist(){   // (named for history: pushes to the Worker or the Gist)
+  if(!cloudOn())return;clearTimeout(pushT);pushT=null;
   if(!syncReady)return pullGist(); // never overwrite the cloud before checking it
-  setSync('busy');const t=S._t;
-  try{await ghApi('gists/'+c.gistId,{method:'PATCH',body:JSON.stringify({files:{[GF]:{content:payload()}}})});setBase(t);setSync('ok')}
-  catch(e){setSync('err',e.message)}
-}
-async function pullGist(){
-  const c=syncCfg();if(!c?.gistId){syncReady=true;return}if(pushT)return;setSync('busy');
+  setSync('busy');S._t??=Date.now();const t=S._t;
   try{
-    const r=await readGist(c.gistId),remote=r.savedAt||0,local=S._t||0;
+    if(wkStore())await wkData(`/data?savedAt=${t}&base=${getBase()}`,{method:'PUT',body:payload()});
+    else{
+      const g=await readGist(syncCfg().gistId);   // moved to the Worker meanwhile? never write over the "moved" note
+      if(g.movedTo==='worker'){syncReady=false;return pullGist()}
+      await ghApi('gists/'+syncCfg().gistId,{method:'PATCH',body:JSON.stringify({files:{[GF]:{content:payload()}}})})}
+    setBase(t);setSync('ok');pushRetry=0;
+  }catch(e){
+    if(e.conflict&&pushRetry++<2){syncReady=false;return pullGist()}   // another device saved first: pull (asks if both changed), then push
+    setSync('err',e.message)}
+}
+async function pullGist(){   // (pulls from the Worker or the Gist)
+  if(!cloudOn()){syncReady=true;if(wkStore())setSync('off');return}if(pushT)return;setSync('busy');
+  try{
+    const r=await readCloud();
+    if(!wkStore()&&r.movedTo==='worker'){   // another device moved sync to the Worker: follow it
+      localStorage.setItem(STORE,'worker');
+      if(onWorker()){toast('Sync now runs through your Worker');return pullGist()}
+      syncReady=true;setSync('off');toast('Sync moved to the Worker: connect Notion sync in Settings to turn it back on');render();return}
+    const remote=r.savedAt||0,local=S._t||0;
     const base=getBase()||Math.min(remote,local); // no base yet (first run after the fix): old newest-wins rule
     const localDirty=local>base,remoteChanged=remote>base;
     syncReady=true;
@@ -548,6 +595,9 @@ async function pullGist(){
   syncReady=true;
 }
 async function connectSync(token){
+  if(wkStore()){   // device sync is on the Worker: the token is only for GitHub notes + the backup plans Gist
+    try{await ghApi('user',{},token)}catch(e){return toast(e.message)}
+    localStorage.setItem(SYNC,JSON.stringify({token}));toast('GitHub token saved');render();return}
   setSync('busy');
   try{
     const id=await findGist(token);
@@ -563,7 +613,24 @@ async function connectSync(token){
     toast('Cloud sync connected');render();
   }catch(e){setSync('err',e.message);toast(e.message)}
 }
-function setSync(s,msg=''){syncSt={s,at:Date.now(),msg};if(s==='ok'&&syncCfg()?.gistId)localStorage.setItem('opuos.lastsync',String(Date.now()));const el=$('#syncInd');if(!el)return;
+/* One-time move of device sync from the Gist to the Worker (Settings → Cloud sync). The Gist keeps
+   its data plus movedTo:'worker', so other devices follow on their next pull. */
+async function moveToWorker(){
+  if(!nsCfg()?.url)return toast('Connect Notion sync (the Worker) first');
+  if(!confirm('Move device sync to your Worker?\n\nYour data is copied to the Worker first. The Gist keeps its copy as a frozen backup, and your other devices switch over by themselves (they need Notion sync connected).'))return;
+  setSync('busy');
+  try{
+    if(syncCfg()?.gistId){await pullGist();if(syncSt.s==='err')throw new Error('Gist: '+syncSt.msg);if(pushT||(S._t||0)!==getBase())await pushGist();if(syncSt.s==='err')throw new Error('Gist: '+syncSt.msg)}
+    const have=await wkData('/data');
+    if(have!=null){   // already moved from another device: just switch and pull
+      localStorage.setItem(STORE,'worker');syncReady=false;await pullGist();toast('Sync now runs through your Worker');render();return}
+    S._t??=Date.now();const t=S._t;
+    await wkData(`/data?savedAt=${t}&base=0`,{method:'PUT',body:payload()});
+    if(syncCfg()?.gistId)await ghApi('gists/'+syncCfg().gistId,{method:'PATCH',body:JSON.stringify({files:{[GF]:{content:JSON.stringify({...JSON.parse(payload()),movedTo:'worker',movedAt:Date.now()})}}})});
+    localStorage.setItem(STORE,'worker');setBase(t);syncReady=true;setSync('ok');toast('Sync moved to your Worker');render();
+  }catch(e){setSync('err',e.message);toast(e.message)}
+}
+function setSync(s,msg=''){syncSt={s,at:Date.now(),msg};if(s==='ok'&&cloudOn())localStorage.setItem('opuos.lastsync',String(Date.now()));const el=$('#syncInd');if(!el)return;
   el.className='sync '+s;el.title=msg;
   el.innerHTML='<span>☁</span><span class="lb">'+{off:'local only',pending:'unsaved changes…',busy:'<span class="pulse">syncing…</span>',ok:'synced',err:'sync error — see Settings'}[s]+'</span>';
   const d=$('#syncDetail');if(d)d.textContent=s==='err'?msg:s==='ok'?'Last synced '+new Date().toLocaleTimeString():'';}
@@ -591,7 +658,7 @@ const vSummary=d=>`${(d.sessions||[]).length} sessions · ${(d.reviewLog||[]).le
 async function historyModal(){
   const c=syncCfg(),rp=(()=>{try{return JSON.parse(localStorage.getItem(REPL))}catch(e){return null}})();
   $('#modal').innerHTML=`<h3>Cloud version history</h3>
-    <p class="muted" style="font-size:14px;margin:-6px 0 12px">Every sync saves a version in your private Gist. Check a version to see what's in it, then restore it. Restoring makes it the newest version; nothing is deleted.</p>
+    <p class="muted" style="font-size:14px;margin:-6px 0 12px">Every sync saves a version ${wkStore()?'in your Worker (the newest 40, plus one a day for 30 days)':'in your private Gist'}. Check a version to see what's in it, then restore it. Restoring makes it the newest version; nothing is deleted.</p>
     <div class="faint mono" style="font-size:12px;margin-bottom:8px">Now on this device: ${vSummary(S)}</div>
     ${rp?`<div class="li" style="flex-wrap:wrap;border:1px dashed var(--line2);border-radius:10px;padding:10px;margin-bottom:12px"><div class="grow"><div>This device's copy from ${new Date(rp.at).toLocaleString()}</div><div class="faint mono" style="font-size:11px">replaced when it ${esc(rp.reason)} · ${vSummary(rp.data)}</div></div><button class="btn sm" id="rpRestore">Restore</button></div>`:''}
     <div id="hist" class="list" style="max-height:46vh;overflow:auto"><div class="faint pulse">Loading versions…</div></div>
@@ -599,14 +666,17 @@ async function historyModal(){
   $('#modalWrap').classList.add('on');$('#mCancel').onclick=closeModal;
   const restore=(data,why)=>{if(!confirm('Restore this version? Your current data is kept as a backup you can switch back to.'))return;stash(why);S=data;migrate();save();closeModal();render();toast('Version restored')};
   if(rp)$('#rpRestore').onclick=()=>restore(rp.data,'restored an earlier copy');
-  if(!c?.gistId){$('#hist').innerHTML='<div class="empty">Cloud sync is off, so there is no cloud history.</div>';return}
+  if(!cloudOn()){$('#hist').innerHTML='<div class="empty">Cloud sync is off, so there is no cloud history.</div>';return}
   try{
-    const L=await ghApi(`gists/${c.gistId}/commits?per_page=40`),got={};
+    const wk=wkStore(),got={};
+    const L=wk?JSON.parse(await wkData('/data/versions')).versions.map(v=>({committed_at:new Date(v.at).toISOString(),version:String(v.id)}))
+      :await ghApi(`gists/${c.gistId}/commits?per_page=40`);
     $('#hist').innerHTML=L.map((v,i)=>`<div class="li" style="flex-wrap:wrap"><div class="grow"><div>${new Date(v.committed_at).toLocaleString()}${i===0?' <span class="pill done">latest</span>':''}</div><div class="faint mono" style="font-size:11px" id="hv${i}"></div></div><button class="btn sm" data-hv="${esc(v.version)}" data-i="${i}">Check</button></div>`).join('')||'<div class="empty">No versions yet.</div>';
     $('#hist').onclick=async e=>{const b=e.target.closest('[data-hv]');if(!b)return;const i=b.dataset.i;
       if(got[i])return restore(got[i].data,'restored an older cloud version');
       b.textContent='…';
-      try{const g=await ghApi(`gists/${c.gistId}/${b.dataset.hv}`),f=g.files[GF],r=JSON.parse(f.truncated?await fetch(f.raw_url).then(x=>x.text()):f.content);
+      try{let r;if(wk)r=JSON.parse(await wkData('/data/version?id='+encodeURIComponent(b.dataset.hv)));
+        else{const g=await ghApi(`gists/${c.gistId}/${b.dataset.hv}`),f=g.files[GF];r=JSON.parse(f.truncated?await fetch(f.raw_url).then(x=>x.text()):f.content)}
         got[i]=r;$('#hv'+i).textContent=`saved ${new Date(r.savedAt).toLocaleString()} · ${vSummary(r.data)}`;b.textContent='Restore';b.classList.add('pri')}
       catch(err){b.textContent='Check';$('#hv'+i).textContent=err.message}};
   }catch(err){$('#hist').innerHTML=`<div class="empty" style="color:var(--red)">${esc(err.message)}</div>`}
@@ -927,7 +997,7 @@ const nsLine=()=>!nsCfg()?'':nsJob.busy?'<span class="faint">↻ syncing with No
 /* Owner-only lock. The code holds only a slow, salted PBKDF2 hash of the owner's passphrase —
    never the passphrase. Set or change it with tools/set_owner.py, then push. Visitors can't
    create their own passphrase. (The code is public, so this keeps people out of the UI; the
-   real data lives in the owner's browser and private Gist, never in this file.) */
+   real data lives in the owner's browser and private Worker / Gist, never in this file.) */
 const OWNER={salt:'1e443741ba2ae0d0d10bfee4277a61c2',iter:600000,hash:'e524a1244be5180283e2323af8e82313c19895f8926598d889135c14e99885a4'};
 const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
 async function ownerHash(pw){
@@ -948,7 +1018,21 @@ function initLock(){
     if(!ok){$('#lockErr').textContent='ACCESS DENIED';$('#lockInput').value='';return}
     sessionStorage.setItem(SKEY,'1');enter();
   };
-  $('#restoreToggle').onclick=()=>{const f=$('#restoreForm');f.style.display=f.style.display==='none'?'block':'none';$('#restoreToken').focus()};
+  $('#restoreToggle').onclick=()=>{const f=$('#restoreWForm'),open=f.style.display!=='none'||$('#restoreForm').style.display!=='none';f.style.display=open?'none':'block';$('#restoreForm').style.display='none';if(!open)$('#restoreWUrl').focus()};
+  $('#restoreGToggle').onclick=()=>{$('#restoreWForm').style.display='none';$('#restoreForm').style.display='block';$('#restoreToken').focus()};
+  $('#restoreWForm').onsubmit=async e=>{
+    e.preventDefault();const url=$('#restoreWUrl').value.trim().replace(/\/+$/,''),key=$('#restoreWKey').value.trim();if(!url||!key)return;
+    $('#restoreWErr').textContent='';
+    if(!/^https:\/\/[^\s/]+$/.test(url)){$('#restoreWErr').textContent='Paste the Worker address, like https://opuos-sync.you.workers.dev';return}
+    $('#restoreWBtn').textContent='Restoring…';
+    try{
+      const t=await wkData('/data',{},{url,key});
+      if(t==null)throw new Error('No data in this Worker yet. Move sync to the Worker in Settings on your other browser first.');
+      const r=JSON.parse(t);
+      localStorage.setItem(KEY,JSON.stringify(r.data));setBase(r.savedAt);
+      localStorage.setItem(NSK,JSON.stringify({url,key}));localStorage.setItem(STORE,'worker');location.reload();
+    }catch(err){$('#restoreWErr').textContent=err.message;$('#restoreWBtn').textContent='Restore from my Worker →'}
+  };
   $('#restoreForm').onsubmit=async e=>{
     e.preventDefault();const token=$('#restoreToken').value.trim();if(!token)return;
     $('#restoreErr').textContent='';$('#restoreBtn').textContent='Restoring…';
@@ -962,7 +1046,7 @@ function initLock(){
   };
   if(ready&&sessionStorage.getItem(SKEY))enter();
 }
-function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(syncCfg()?.gistId?'ok':'off');go(location.hash.slice(1)||'dash');renderTimer();checkSite();checkPersist();pullGist().then(()=>{checkAutoPlans();nsSync();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)})}
+function enter(){$('#lock').style.display='none';$('#app').classList.add('on');if(localStorage.getItem('opuos.side'))$('#app').classList.add('collapsed');load();unlocked=true;loadGhNotes();setSync(cloudOn()?'ok':'off');go(location.hash.slice(1)||'dash');renderTimer();checkSite();checkPersist();pullGist().then(()=>{checkAutoPlans();nsSync();if(S.settings.github&&(!S.gh||Date.now()-S.gh.at>36e5))syncGH(true)})}
 function lock(){sessionStorage.removeItem(SKEY);location.reload()}
 
 /* ---------------- stats helpers ---------------- */
@@ -996,7 +1080,7 @@ function dash(){
     <div class="muted" style="margin-top:6px">${doing.length?`Currently on: ${doing.map(d=>esc(d.title)).join(' · ')}`:nx?`Next up: Step ${nx.step} · ${esc(nx.title)}`:'Pick something from your roadmap to start today.'}</div></div>
     <div class="chips"><button class="btn" data-act="logSession">+ Log session</button><button class="btn" data-act="addJob">+ Application</button><button class="btn pri" data-act="timerStart" data-m="25">▶ Focus 25</button></div>
   </div>
-  ${backupDue()?`<div class="banner" style="border-color:rgba(255,198,92,.35);background:rgba(255,198,92,.08)"><span>${I('down')} ${S.lastBackup?`Last backup was <b>${daysSince(S.lastBackup)} days ago</b>.`:'You haven\'t exported a backup yet.'} ${syncCfg()?.gistId?'Cloud sync is on, but a file backup protects you even if the Gist is lost.':'Cloud sync is off, so this browser holds your only copy.'}</span><span class="chips"><button class="btn sm pri" data-act="export">Export backup</button><button class="btn sm ghost" data-act="snooze">Later</button></span></div>`:''}
+  ${backupDue()?`<div class="banner" style="border-color:rgba(255,198,92,.35);background:rgba(255,198,92,.08)"><span>${I('down')} ${S.lastBackup?`Last backup was <b>${daysSince(S.lastBackup)} days ago</b>.`:'You haven\'t exported a backup yet.'} ${cloudOn()?'Cloud sync is on, but a file backup protects you even if the cloud copy is lost.':'Cloud sync is off, so this browser holds your only copy.'}</span><span class="chips"><button class="btn sm pri" data-act="export">Export backup</button><button class="btn sm ghost" data-act="snooze">Later</button></span></div>`:''}
   <div class="g g4">
     <div class="card stat"><div class="label">This week</div><div class="v">${(wm/60).toFixed(1)}<small> / ${S.settings.weeklyGoal}h</small></div><div class="meter"><i style="width:${Math.min(100,wm/goal*100)}%"></i></div></div>
     <div class="card stat"><div class="label">Study streak</div><div class="v">${streak()}<small> day${streak()===1?'':'s'}</small></div><div class="k faint mono" style="font-size:12px">${hm(S.sessions.reduce((a,s)=>a+(+s.minutes||0),0))} all-time</div></div>
@@ -1869,7 +1953,7 @@ function paintSite(){const el=$('#siteStatus');if(!el)return;el.className='statu
 /* ---------------- SETTINGS ---------------- */
 function settings(){
   const s=S.settings;
-  return `<div class="head"><div><h2>Settings</h2><div class="sub">${syncCfg()?.gistId?'Synced to your private GitHub Gist.':'Data is in this browser only — turn on cloud sync or export a backup.'}</div></div><button class="btn" data-act="lock">${I('lock')} Lock</button></div>
+  return `<div class="head"><div><h2>Settings</h2><div class="sub">${onWorker()?'Synced to your private Worker.':syncCfg()?.gistId&&!wkStore()?'Synced to your private GitHub Gist.':'Data is in this browser only — turn on cloud sync or export a backup.'}</div></div><button class="btn" data-act="lock">${I('lock')} Lock</button></div>
   <div class="g g2">
     <div class="card"><h3>Profile</h3>
       <div class="field"><span class="label">Display name</span><input id="sName" value="${esc(s.name)}"></div>
@@ -1880,11 +1964,17 @@ function settings(){
       <div class="field"><span class="label">Code repos (public, comma-separated)</span><input id="sCode" value="${esc((s.codeRepos||[]).join(', '))}" placeholder="CS50P, leetcode-solutions"><span class="faint" style="font-size:12px">Code files shown in Notes → Code. cs50x is left out on purpose.</span></div>
       <button class="btn pri" data-act="saveSettings">Save</button></div>
     <div class="g" style="align-content:start">
-      <div class="card"><h3>Cloud sync <span class="mono" style="text-transform:none;letter-spacing:0;color:${syncCfg()?.gistId?'var(--acc)':'var(--faint)'}">${syncCfg()?.gistId?'● connected':'○ off'}</span></h3>
-      ${syncCfg()?.gistId?`<div class="muted" style="font-size:14px;margin-bottom:12px">Your data saves to a private Gist a few seconds after each change. On a new browser, use <b>Restore from GitHub Gist</b> on the lock screen.</div>
+      <div class="card"><h3>Cloud sync <span class="mono" style="text-transform:none;letter-spacing:0;color:${cloudOn()?'var(--acc)':'var(--faint)'}">${onWorker()?'● connected · Worker':cloudOn()?'● connected · Gist':'○ off'}</span></h3>
+      ${onWorker()?`<div class="muted" style="font-size:14px;margin-bottom:12px">Your data saves to your private Worker a few seconds after each change, with version history. On a new browser, use <b>Restore</b> on the lock screen with the Worker address and sync key.</div>
+        <div class="chips"><button class="btn" data-act="syncNow">${I('refresh')} Sync now</button><button class="btn" data-act="history">🕘 Version history</button></div>
+        <div class="faint mono" id="syncDetail" style="font-size:12px;margin-top:10px"></div>
+        <div class="faint" style="font-size:12px;margin-top:12px">${syncCfg()?.token?`GitHub token saved: used for GitHub notes and the backup plans Gist. <button class="btn sm ghost" data-act="syncOff">Remove</button>`:`Optional: a GitHub token gives GitHub notes a higher rate limit.<div class="field" style="margin-top:8px"><input id="sTok" type="password" placeholder="ghp_…" autocomplete="off"></div><button class="btn sm" data-act="syncOn">Save token</button>`}</div>`
+      :wkStore()?`<div class="muted" style="font-size:14px">Device sync moved to your Worker. Connect <b>Notion sync</b> below on this device to turn it back on.</div>`
+      :syncCfg()?.gistId?`<div class="muted" style="font-size:14px;margin-bottom:12px">Your data saves to a private Gist a few seconds after each change. On a new browser, use <b>Restore from GitHub Gist</b> on the lock screen.</div>
         <div class="chips"><button class="btn" data-act="syncNow">${I('refresh')} Sync now</button><button class="btn" data-act="history">🕘 Version history</button><a class="btn" href="https://gist.github.com/${esc(syncCfg().gistId)}" target="_blank" rel="noopener">View Gist ↗</a><button class="btn danger" data-act="syncOff">Disconnect</button></div>
+        ${nsCfg()?.url?`<div class="banner" style="margin:12px 0 0;font-size:13px"><span>Your Worker can keep your data instead of the Gist: one place for everything, with version history.</span><button class="btn sm pri" data-act="moveSync">Move sync to the Worker</button></div>`:''}
         <div class="faint mono" id="syncDetail" style="font-size:12px;margin-top:10px"></div>`
-      :`<ol class="steps"><li><a href="https://github.com/settings/tokens/new?scopes=gist&description=OPU%2FOS%20sync" target="_blank" rel="noopener">Create a GitHub token ↗</a> with <b>only</b> the <code>gist</code> scope</li><li>Paste it below and connect</li></ol>
+      :`${nsCfg()?.url?`<div class="muted" style="font-size:14px;margin-bottom:10px">Sync this device through your Worker (if another device already did, its data is loaded here).</div><button class="btn pri" data-act="moveSync">Sync through the Worker</button><div class="faint" style="font-size:12px;margin:14px 0 8px">Or the older way, a GitHub Gist:</div>`:''}<ol class="steps"><li><a href="https://github.com/settings/tokens/new?scopes=gist&description=OPU%2FOS%20sync" target="_blank" rel="noopener">Create a GitHub token ↗</a> with <b>only</b> the <code>gist</code> scope</li><li>Paste it below and connect</li></ol>
         <div class="field"><input id="sTok" type="password" placeholder="ghp_…" autocomplete="off"></div><button class="btn pri" data-act="syncOn">Connect sync</button>
         <div class="faint mono" id="syncDetail" style="font-size:12px;margin-top:10px"></div>`}</div>
       ${nsCard()}
@@ -1892,14 +1982,14 @@ function settings(){
         const row=(k,v)=>`<div class="li" style="padding:7px 0"><div class="grow muted" style="font-size:14px">${k}</div><div class="mono" style="font-size:12.5px;text-align:right">${v}</div></div>`;
         return `<div class="list">${row('Keep data on this device',persistSt===true?'<span style="color:var(--acc)">● persistent</span>':persistSt===false?`<span style="color:var(--amber)">○ not granted</span> <button class="btn sm" data-act="persist">Ask again</button>`:'<span class="faint">not supported here</span>')}
           ${row('Data size',`${kb(size)} <span class="faint">of ~5 MB</span>`)}
-          ${row('Last cloud sync',syncCfg()?.gistId?(ls?ago(new Date(ls).toISOString()):'—'):'<span style="color:var(--amber)">sync off</span>')}
+          ${row('Last cloud sync',cloudOn()?(ls?ago(new Date(ls).toISOString()):'—'):'<span style="color:var(--amber)">sync off</span>')}
           ${row('Last file backup',S.lastBackup?`${fmtDate(S.lastBackup)} <span class="faint">(${bd} day${bd===1?'':'s'} ago)</span>`:'<span style="color:var(--amber)">never</span>')}</div>
           ${isIOS&&!isStandalone?`<div class="banner" style="margin:12px 0 0;font-size:13px">On iPhone, Safari deletes site data after 7 days without a visit. Tap Share → <b>Add to Home Screen</b> and open OPU/OS from there to avoid it.</div>`:''}
           <div class="faint" style="font-size:12px;margin-top:10px">"Persistent" means the browser won't delete this site's data by itself when space runs low. Clearing site data yourself still removes it, so keep sync on and export now and then.</div>`})()}</div>
       <div class="card"><h3>Data</h3><div class="chips"><button class="btn" data-act="export">${I('down')} Export JSON</button><button class="btn" data-act="import">${I('up')} Import JSON</button><button class="btn danger" data-act="reset">Reset everything</button></div><input type="file" id="impFile" accept=".json" style="display:none">
         <div class="faint" style="font-size:12px;margin-top:10px">Import accepts a full backup (replaces everything) or a Notion import file (merges: roadmap, weekly plans, notes, LeetCode).</div></div>
       <div class="card"><h3>Security</h3><div class="muted" style="font-size:14px">Owner-only lock: only your passphrase opens this app, in any browser. To change it, run <code>python3 tools/set_owner.py</code> in the repo and push.</div>
-      <div class="faint" style="font-size:12px;margin-top:10px">The code is public, so the lock keeps visitors out of the interface. Your data isn't in the code: it lives in your browser and your private Gist.</div></div>
+      <div class="faint" style="font-size:12px;margin-top:10px">The code is public, so the lock keeps visitors out of the interface. Your data isn't in the code: it lives in your browser and your private ${wkStore()?'Worker':'Gist'}.</div></div>
     </div>
   </div>`;
 }
@@ -2074,11 +2164,13 @@ const A={
   persist:()=>checkPersist(true).then(()=>toast(persistSt?'Browser will keep this data':'Browser said no — keep sync on and export backups')),
   syncOn:()=>{const t=$('#sTok').value.trim();if(t)connectSync(t)},
   syncNow:async()=>{await pullGist();if(syncSt.s!=='err')await pushGist();toast(syncSt.s==='err'?syncSt.msg:'Synced')},
-  syncOff:()=>{if(confirm('Disconnect cloud sync on this browser? (Your Gist is kept.)')){localStorage.removeItem(SYNC);setSync('off');render()}},
+  syncOff:()=>{if(wkStore()){if(confirm('Remove the GitHub token from this browser? (Device sync keeps running through the Worker.)')){localStorage.removeItem(SYNC);render()}return}
+    if(confirm('Disconnect cloud sync on this browser? (Your Gist is kept.)')){localStorage.removeItem(SYNC);setSync('off');render()}},
+  moveSync:()=>moveToWorker(),
   nsOn:()=>{const url=$('#nsUrl').value.trim().replace(/\/+$/,''),key=$('#nsKey').value.trim();
     if(!/^https:\/\/[^\s/]+$/.test(url))return toast('Paste the Worker address, like https://opuos-sync.you.workers.dev');
     if(key.length<32)return toast('The sync key looks too short');
-    localStorage.setItem(NSK,JSON.stringify({url,key}));nsPing()},
+    localStorage.setItem(NSK,JSON.stringify({url,key}));nsPing();if(wkStore()){syncReady=false;pullGist().then(render)}},
   nsTest:()=>nsPing(),
   nsOff:()=>{if(confirm('Disconnect Notion sync on this browser? (Nothing in Notion changes.)')){localStorage.removeItem(NSK);nsSt={busy:false,msg:'',kinds:null};render()}},
   export:()=>{S.lastBackup=today();save();localStorage.removeItem('opuos.snooze');if(['dash','settings'].includes(view))render();const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));a.download=`opuos-backup-${today()}.json`;a.click()},
