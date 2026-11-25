@@ -36,4 +36,4 @@ Test in headless Chrome (`google-chrome --headless=new`):
 The private repo `~/code/opuos-automation` (GitHub Action, `notion_to_gist.py`) writes the latest Notion plans into the secret Gist file `opuos-weekly-plans.json`. In the app, `checkAutoPlans()` and `mergeAutoPlans()` read it with the sync token (plans are matched by week, and `srcMd` detects changes).
 
 ## Pending (decided "later")
-Optional Cloudflare Pages + Access, optional data encryption. Details are in `OPUOS_GUIDE.txt` section 12.
+Optional Cloudflare Pages + Access, optional data encryption. Owner's own cleanup (he'll do it himself): disable the weekly-plans Action, delete the plans Gist and the frozen data Gist, maybe the GitHub token. Until he does, keep the Gist fallback code. Details are in `OPUOS_GUIDE.txt` section 12 (e).
